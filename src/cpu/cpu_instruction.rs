@@ -10,8 +10,8 @@ pub struct CpuInstruction {
 }
 
 impl CpuInstruction {
-    pub fn decode(byte: u8) -> Self {
-        match byte {
+    pub fn decode(opcode: u8) -> Self {
+        match opcode {
             0xA9 => Self {
                 instruction: Instruction::Lda,
                 addr_mode: AddressingMode::Immediate,
