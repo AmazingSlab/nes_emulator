@@ -10,52 +10,26 @@ pub struct CpuInstruction {
 }
 
 impl CpuInstruction {
+    fn new(instruction: Instruction, addr_mode: AddressingMode) -> Self {
+        Self {
+            instruction,
+            addr_mode,
+        }
+    }
+
     pub fn decode(opcode: u8) -> Self {
         match opcode {
-            0xA9 => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::Immediate,
-            },
-            0xA5 => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::ZeroPage,
-            },
-            0xB5 => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::ZeroPageX,
-            },
-            0xAD => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::Absolute,
-            },
-            0xBD => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::AbsoluteX,
-            },
-            0xB9 => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::AbsoluteY,
-            },
-            0xA1 => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::IndexedIndirect,
-            },
-            0xB1 => Self {
-                instruction: Instruction::Lda,
-                addr_mode: AddressingMode::IndirectIndexed,
-            },
-            0xA2 => Self {
-                instruction: Instruction::Ldx,
-                addr_mode: AddressingMode::Immediate,
-            },
-            0xB6 => Self {
-                instruction: Instruction::Ldx,
-                addr_mode: AddressingMode::ZeroPageY,
-            },
-            0xA0 => Self {
-                instruction: Instruction::Ldy,
-                addr_mode: AddressingMode::Immediate,
-            },
+            0xA9 => Self::new(Instruction::Lda, AddressingMode::Immediate),
+            0xA5 => Self::new(Instruction::Lda, AddressingMode::ZeroPage),
+            0xB5 => Self::new(Instruction::Lda, AddressingMode::ZeroPageX),
+            0xAD => Self::new(Instruction::Lda, AddressingMode::Absolute),
+            0xBD => Self::new(Instruction::Lda, AddressingMode::AbsoluteX),
+            0xB9 => Self::new(Instruction::Lda, AddressingMode::AbsoluteY),
+            0xA1 => Self::new(Instruction::Lda, AddressingMode::IndexedIndirect),
+            0xB1 => Self::new(Instruction::Lda, AddressingMode::IndirectIndexed),
+            0xA2 => Self::new(Instruction::Ldx, AddressingMode::Immediate),
+            0xB6 => Self::new(Instruction::Ldx, AddressingMode::ZeroPageY),
+            0xA0 => Self::new(Instruction::Ldy, AddressingMode::Immediate),
             _ => todo!(),
         }
     }
