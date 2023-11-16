@@ -72,6 +72,7 @@ impl Cpu {
     ///
     /// Returns the number of cycles the instruction takes.
     pub fn execute(&mut self, instruction: CpuInstruction) -> u8 {
+        self.program_counter += 1;
         let addr_mode_cycles = match instruction.addr_mode {
             AddressingMode::Immediate => self.immediate(),
             AddressingMode::ZeroPage => self.zero_page(),
@@ -87,6 +88,7 @@ impl Cpu {
             _ => todo!(),
         };
 
+        self.program_counter += 1;
         let instruction_cycles = match instruction.instruction {
             Instruction::Lda => self.lda(),
             Instruction::Ldx => self.ldx(),
@@ -98,7 +100,6 @@ impl Cpu {
     }
 
     pub fn lda(&mut self) -> u8 {
-        self.program_counter += 1;
         let data = self.read(self.absolute_address);
         self.accumulator = data;
 
@@ -109,7 +110,6 @@ impl Cpu {
     }
 
     pub fn ldx(&mut self) -> u8 {
-        self.program_counter += 1;
         let data = self.read(self.absolute_address);
         self.x_register = data;
 
@@ -120,7 +120,6 @@ impl Cpu {
     }
 
     pub fn ldy(&mut self) -> u8 {
-        self.program_counter += 1;
         let data = self.read(self.absolute_address);
         self.y_register = data;
 
@@ -137,19 +136,16 @@ impl Cpu {
 /// instructions themselves.
 impl Cpu {
     pub fn immediate(&mut self) -> u8 {
-        self.program_counter += 1;
         self.absolute_address = self.program_counter;
         0
     }
 
     pub fn zero_page(&mut self) -> u8 {
-        self.program_counter += 1;
         self.absolute_address = self.read(self.program_counter) as u16;
         1
     }
 
     pub fn zero_page_x(&mut self) -> u8 {
-        self.program_counter += 1;
         self.absolute_address = self
             .read(self.program_counter)
             .wrapping_add(self.x_register) as u16;
@@ -158,7 +154,6 @@ impl Cpu {
     }
 
     pub fn zero_page_y(&mut self) -> u8 {
-        self.program_counter += 1;
         self.absolute_address = self
             .read(self.program_counter)
             .wrapping_add(self.y_register) as u16;
@@ -167,7 +162,6 @@ impl Cpu {
     }
 
     pub fn relative(&mut self) -> u8 {
-        self.program_counter += 1;
         let offset = self.read(self.program_counter) as i16;
         let address = self.absolute_address.wrapping_add_signed(offset);
         self.absolute_address = address;
@@ -181,7 +175,6 @@ impl Cpu {
     }
 
     pub fn absolute(&mut self) -> u8 {
-        self.program_counter += 1;
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -192,7 +185,6 @@ impl Cpu {
     }
 
     pub fn absolute_x(&mut self) -> u8 {
-        self.program_counter += 1;
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -210,7 +202,6 @@ impl Cpu {
     }
 
     pub fn absolute_y(&mut self) -> u8 {
-        self.program_counter += 1;
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -228,7 +219,6 @@ impl Cpu {
     }
 
     pub fn indirect(&mut self) -> u8 {
-        self.program_counter += 1;
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -251,7 +241,6 @@ impl Cpu {
     }
 
     pub fn indexed_indirect(&mut self) -> u8 {
-        self.program_counter += 1;
         let offset = self.read(self.program_counter);
         let address = offset.wrapping_add(self.x_register) as u16;
 
@@ -265,7 +254,6 @@ impl Cpu {
     }
 
     pub fn indirect_indexed(&mut self) -> u8 {
-        self.program_counter += 1;
         let address = self.read(self.program_counter) as u16;
 
         let low = self.read(address);
