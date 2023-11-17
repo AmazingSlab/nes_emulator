@@ -168,7 +168,7 @@ impl CpuInstruction {
             0xF9 => Self::new(Instruction::Sbc, AddressingMode::AbsoluteY),
             0xFD => Self::new(Instruction::Sbc, AddressingMode::AbsoluteX),
             0xFE => Self::new(Instruction::Inc, AddressingMode::AbsoluteX),
-            _ => unimplemented!("illegal opcodes are not supported"),
+            other => unimplemented!("illegal opcodes are not supported (0x{other:02X})"),
         }
     }
 }
