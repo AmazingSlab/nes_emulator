@@ -48,10 +48,7 @@ impl Cpu {
     }
 }
 
-/// Instruction implementations.
-///
-/// Return value of instructions represents the base cycle cost of each instruction, separate from
-/// the cost of the addressing modes.
+/// Higher level functions to control the CPU.
 impl Cpu {
     /// Executes the next instruction.
     ///
@@ -199,7 +196,13 @@ impl Cpu {
             4
         }
     }
+}
 
+/// Instruction implementations.
+///
+/// The return value represents the base cycle cost of each instruction, separate from the cost of
+/// the addressing modes.
+impl Cpu {
     fn adc(&mut self) -> u8 {
         let data = self.read(self.absolute_address);
         self.add(data)
