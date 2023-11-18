@@ -129,17 +129,17 @@ impl Cpu {
         2
     }
 
-    pub fn adc(&mut self) -> u8 {
+    fn adc(&mut self) -> u8 {
         let data = self.read(self.absolute_address);
         self.add(data)
     }
 
-    pub fn clc(&mut self) -> u8 {
+    fn clc(&mut self) -> u8 {
         self.status.set(Status::C, false);
         2
     }
 
-    pub fn lda(&mut self) -> u8 {
+    fn lda(&mut self) -> u8 {
         let data = self.read(self.absolute_address);
         self.accumulator = data;
 
@@ -149,7 +149,7 @@ impl Cpu {
         2
     }
 
-    pub fn ldx(&mut self) -> u8 {
+    fn ldx(&mut self) -> u8 {
         let data = self.read(self.absolute_address);
         self.x_register = data;
 
@@ -159,7 +159,7 @@ impl Cpu {
         2
     }
 
-    pub fn ldy(&mut self) -> u8 {
+    fn ldy(&mut self) -> u8 {
         let data = self.read(self.absolute_address);
         self.y_register = data;
 
@@ -169,29 +169,29 @@ impl Cpu {
         2
     }
 
-    pub fn sbc(&mut self) -> u8 {
+    fn sbc(&mut self) -> u8 {
         let data = self.read(self.absolute_address);
 
         // Subtracting is the same as adding the inverse.
         self.add(!data)
     }
 
-    pub fn sec(&mut self) -> u8 {
+    fn sec(&mut self) -> u8 {
         self.status.set(Status::C, true);
         2
     }
 
-    pub fn sta(&mut self) -> u8 {
+    fn sta(&mut self) -> u8 {
         self.write(self.absolute_address, self.accumulator);
         2
     }
 
-    pub fn stx(&mut self) -> u8 {
+    fn stx(&mut self) -> u8 {
         self.write(self.absolute_address, self.x_register);
         2
     }
 
-    pub fn sty(&mut self) -> u8 {
+    fn sty(&mut self) -> u8 {
         self.write(self.absolute_address, self.y_register);
         2
     }
@@ -202,24 +202,24 @@ impl Cpu {
 /// Return value represents the added cycle cost of each mode, separate from the cost of the
 /// instructions themselves.
 impl Cpu {
-    pub fn implicit(&mut self) -> u8 {
+    fn implicit(&mut self) -> u8 {
         // Incrementing program counter is unnecessary for implicit addressing; revert addition at
         // call site.
         self.program_counter -= 1;
         0
     }
 
-    pub fn immediate(&mut self) -> u8 {
+    fn immediate(&mut self) -> u8 {
         self.absolute_address = self.program_counter;
         0
     }
 
-    pub fn zero_page(&mut self) -> u8 {
+    fn zero_page(&mut self) -> u8 {
         self.absolute_address = self.read(self.program_counter) as u16;
         1
     }
 
-    pub fn zero_page_x(&mut self) -> u8 {
+    fn zero_page_x(&mut self) -> u8 {
         self.absolute_address = self
             .read(self.program_counter)
             .wrapping_add(self.x_register) as u16;
@@ -227,7 +227,7 @@ impl Cpu {
         2
     }
 
-    pub fn zero_page_y(&mut self) -> u8 {
+    fn zero_page_y(&mut self) -> u8 {
         self.absolute_address = self
             .read(self.program_counter)
             .wrapping_add(self.y_register) as u16;
@@ -235,7 +235,7 @@ impl Cpu {
         2
     }
 
-    pub fn relative(&mut self) -> u8 {
+    fn relative(&mut self) -> u8 {
         let offset = self.read(self.program_counter) as i16;
         let address = self.absolute_address.wrapping_add_signed(offset);
         self.absolute_address = address;
@@ -248,7 +248,7 @@ impl Cpu {
         }
     }
 
-    pub fn absolute(&mut self) -> u8 {
+    fn absolute(&mut self) -> u8 {
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -258,7 +258,7 @@ impl Cpu {
         2
     }
 
-    pub fn absolute_x(&mut self) -> u8 {
+    fn absolute_x(&mut self) -> u8 {
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -275,7 +275,7 @@ impl Cpu {
         }
     }
 
-    pub fn absolute_y(&mut self) -> u8 {
+    fn absolute_y(&mut self) -> u8 {
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -292,7 +292,7 @@ impl Cpu {
         }
     }
 
-    pub fn indirect(&mut self) -> u8 {
+    fn indirect(&mut self) -> u8 {
         let low = self.read(self.program_counter);
         self.program_counter += 1;
         let high = self.read(self.program_counter);
@@ -314,7 +314,7 @@ impl Cpu {
         4
     }
 
-    pub fn indexed_indirect(&mut self) -> u8 {
+    fn indexed_indirect(&mut self) -> u8 {
         let offset = self.read(self.program_counter);
         let address = offset.wrapping_add(self.x_register) as u16;
 
@@ -327,7 +327,7 @@ impl Cpu {
         4
     }
 
-    pub fn indirect_indexed(&mut self) -> u8 {
+    fn indirect_indexed(&mut self) -> u8 {
         let address = self.read(self.program_counter) as u16;
 
         let low = self.read(address);
