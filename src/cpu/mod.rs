@@ -97,10 +97,12 @@ impl Cpu {
             Instruction::And => self.and(),
             Instruction::Asl => self.asl(),
             Instruction::Clc => self.clc(),
+            Instruction::Eor => self.eor(),
             Instruction::Lda => self.lda(),
             Instruction::Ldx => self.ldx(),
             Instruction::Ldy => self.ldy(),
             Instruction::Lsr => self.lsr(),
+            Instruction::Ora => self.ora(),
             Instruction::Rol => self.rol(),
             Instruction::Ror => self.ror(),
             Instruction::Sbc => self.sbc(),
@@ -131,6 +133,22 @@ impl Cpu {
         self.status.set(Status::C, has_carry);
         self.status.set(Status::Z, result == 0);
         self.status.set(Status::V, has_overflowed);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        2
+    }
+
+    /// Powers the AND, EOR, and ORA instructions.
+    fn bitwise(&mut self, operation: BitwiseOperation) -> u8 {
+        let data = self.read(self.absolute_address);
+        let result = match operation {
+            BitwiseOperation::And => self.accumulator & data,
+            BitwiseOperation::Or => self.accumulator | data,
+            BitwiseOperation::Xor => self.accumulator ^ data,
+        };
+        self.accumulator = result;
+
+        self.status.set(Status::Z, result == 0);
         self.status.set(Status::N, is_bit_set(result, 7));
 
         2
@@ -209,14 +227,7 @@ impl Cpu {
     }
 
     fn and(&mut self) -> u8 {
-        let data = self.read(self.absolute_address);
-        let result = self.accumulator & data;
-        self.accumulator = result;
-
-        self.status.set(Status::Z, result == 0);
-        self.status.set(Status::N, is_bit_set(result, 7));
-
-        2
+        self.bitwise(BitwiseOperation::And)
     }
 
     fn asl(&mut self) -> u8 {
@@ -226,6 +237,10 @@ impl Cpu {
     fn clc(&mut self) -> u8 {
         self.status.set(Status::C, false);
         2
+    }
+
+    fn eor(&mut self) -> u8 {
+        self.bitwise(BitwiseOperation::Xor)
     }
 
     fn lda(&mut self) -> u8 {
@@ -242,6 +257,10 @@ impl Cpu {
 
     fn lsr(&mut self) -> u8 {
         self.shift(ShiftDirection::Right, false)
+    }
+
+    fn ora(&mut self) -> u8 {
+        self.bitwise(BitwiseOperation::Or)
     }
 
     fn rol(&mut self) -> u8 {
@@ -449,6 +468,13 @@ pub enum AddressingMode {
     Indirect,
     IndexedIndirect,
     IndirectIndexed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BitwiseOperation {
+    And,
+    Or,
+    Xor,
 }
 
 /// The direction to perform bitshift operations.
