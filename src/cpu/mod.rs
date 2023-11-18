@@ -280,6 +280,24 @@ impl Cpu {
     }
 }
 
+/// Higher level functions useful for address mode implementations.
+impl Cpu {
+    /// Reads a 16-bit value at the program counter.
+    fn read_u16(&mut self) -> u16 {
+        let result = self.read_u16_absolute(self.program_counter);
+        self.program_counter += 1;
+        result
+    }
+
+    /// Reads a 16-bit value at a specific address.
+    fn read_u16_absolute(&mut self, address: u16) -> u16 {
+        let low = self.read(address);
+        let high = self.read(address + 1);
+
+        concat_bytes(low, high)
+    }
+}
+
 /// Addressing mode implementations.
 ///
 /// Return value represents the added cycle cost of each mode, separate from the cost of the
@@ -340,22 +358,12 @@ impl Cpu {
     }
 
     fn absolute(&mut self) -> u8 {
-        let low = self.read(self.program_counter);
-        self.program_counter += 1;
-        let high = self.read(self.program_counter);
-
-        self.absolute_address = concat_bytes(low, high);
-
+        self.absolute_address = self.read_u16();
         2
     }
 
     fn absolute_x(&mut self) -> u8 {
-        let low = self.read(self.program_counter);
-        self.program_counter += 1;
-        let high = self.read(self.program_counter);
-
-        let address = concat_bytes(low, high);
-
+        let address = self.read_u16();
         self.absolute_address = address + self.x_register as u16;
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
@@ -367,12 +375,7 @@ impl Cpu {
     }
 
     fn absolute_y(&mut self) -> u8 {
-        let low = self.read(self.program_counter);
-        self.program_counter += 1;
-        let high = self.read(self.program_counter);
-
-        let address = concat_bytes(low, high);
-
+        let address = self.read_u16();
         self.absolute_address = address + self.y_register as u16;
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
@@ -384,11 +387,7 @@ impl Cpu {
     }
 
     fn indirect(&mut self) -> u8 {
-        let low = self.read(self.program_counter);
-        self.program_counter += 1;
-        let high = self.read(self.program_counter);
-
-        let address = concat_bytes(low, high);
+        let address = self.read_u16();
         let low = self.read(address);
 
         // Emulate a bug where if the indirect address lies on a page boundary (0x__FF), it wraps
@@ -409,10 +408,7 @@ impl Cpu {
         let offset = self.read(self.program_counter);
         let address = offset.wrapping_add(self.x_register) as u16;
 
-        let low = self.read(address);
-        let high = self.read(address + 1);
-
-        let address = concat_bytes(low, high);
+        let address = self.read_u16_absolute(address);
         self.absolute_address = address;
 
         4
@@ -420,11 +416,7 @@ impl Cpu {
 
     fn indirect_indexed(&mut self) -> u8 {
         let address = self.read(self.program_counter) as u16;
-
-        let low = self.read(address);
-        let high = self.read(address + 1);
-
-        let address = concat_bytes(low, high);
+        let address = self.read_u16_absolute(address);
         self.absolute_address = address + self.y_register as u16;
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
