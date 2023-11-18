@@ -17,6 +17,7 @@ pub struct Cpu {
 
     absolute_address: u16,
     bus: Rc<RefCell<Bus>>,
+    operate_on_accumulator: bool,
 }
 
 impl Cpu {
@@ -75,6 +76,7 @@ impl Cpu {
         self.program_counter += 1;
         let addr_mode_cycles = match instruction.addr_mode {
             AddressingMode::Implicit => self.implicit(),
+            AddressingMode::Accumulator => self.accumulator(),
             AddressingMode::Immediate => self.immediate(),
             AddressingMode::ZeroPage => self.zero_page(),
             AddressingMode::ZeroPageX => self.zero_page_x(),
@@ -86,16 +88,20 @@ impl Cpu {
             AddressingMode::Indirect => self.indirect(),
             AddressingMode::IndexedIndirect => self.indexed_indirect(),
             AddressingMode::IndirectIndexed => self.indirect_indexed(),
-            _ => todo!(),
         };
 
         self.program_counter += 1;
         let instruction_cycles = match instruction.instruction {
             Instruction::Adc => self.adc(),
+            Instruction::And => self.and(),
+            Instruction::Asl => self.asl(),
             Instruction::Clc => self.clc(),
             Instruction::Lda => self.lda(),
             Instruction::Ldx => self.ldx(),
             Instruction::Ldy => self.ldy(),
+            Instruction::Lsr => self.lsr(),
+            Instruction::Rol => self.rol(),
+            Instruction::Ror => self.ror(),
             Instruction::Sbc => self.sbc(),
             Instruction::Sec => self.sec(),
             Instruction::Sta => self.sta(),
@@ -134,6 +140,45 @@ impl Cpu {
         self.add(data)
     }
 
+    fn and(&mut self) -> u8 {
+        let data = self.read(self.absolute_address);
+        let result = self.accumulator & data;
+        self.accumulator = result;
+
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        2
+    }
+
+    fn asl(&mut self) -> u8 {
+        let data = if self.operate_on_accumulator {
+            self.accumulator
+        } else {
+            self.read(self.absolute_address)
+        };
+
+        let carry = is_bit_set(data, 7);
+        let result = data << 1;
+
+        if self.operate_on_accumulator {
+            self.accumulator = result;
+        } else {
+            self.write(self.absolute_address, result);
+        }
+
+        self.status.set(Status::C, carry);
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        if self.operate_on_accumulator {
+            self.operate_on_accumulator = false;
+            2
+        } else {
+            4
+        }
+    }
+
     fn clc(&mut self) -> u8 {
         self.status.set(Status::C, false);
         2
@@ -167,6 +212,92 @@ impl Cpu {
         self.status.set(Status::N, is_bit_set(data, 7));
 
         2
+    }
+
+    fn lsr(&mut self) -> u8 {
+        let data = if self.operate_on_accumulator {
+            self.accumulator
+        } else {
+            self.read(self.absolute_address)
+        };
+
+        let carry = is_bit_set(data, 0);
+        let result = data >> 1;
+
+        if self.operate_on_accumulator {
+            self.accumulator = result;
+        } else {
+            self.write(self.absolute_address, result);
+        }
+
+        self.status.set(Status::C, carry);
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        if self.operate_on_accumulator {
+            self.operate_on_accumulator = false;
+            2
+        } else {
+            4
+        }
+    }
+
+    fn rol(&mut self) -> u8 {
+        let data = if self.operate_on_accumulator {
+            self.accumulator
+        } else {
+            self.read(self.absolute_address)
+        };
+
+        let carry = is_bit_set(data, 7);
+        let result = data << 1;
+        let result = result + self.status.intersects(Status::C) as u8;
+
+        if self.operate_on_accumulator {
+            self.accumulator = result;
+        } else {
+            self.write(self.absolute_address, result);
+        }
+
+        self.status.set(Status::C, carry);
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        if self.operate_on_accumulator {
+            self.operate_on_accumulator = false;
+            2
+        } else {
+            4
+        }
+    }
+
+    fn ror(&mut self) -> u8 {
+        let data = if self.operate_on_accumulator {
+            self.accumulator
+        } else {
+            self.read(self.absolute_address)
+        };
+
+        let carry = is_bit_set(data, 0);
+        let result = data >> 1;
+        let result = result + ((self.status.intersects(Status::C) as u8) << 7);
+
+        if self.operate_on_accumulator {
+            self.accumulator = result;
+        } else {
+            self.write(self.absolute_address, result);
+        }
+
+        self.status.set(Status::C, carry);
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        if self.operate_on_accumulator {
+            self.operate_on_accumulator = false;
+            2
+        } else {
+            4
+        }
     }
 
     fn sbc(&mut self) -> u8 {
@@ -206,6 +337,14 @@ impl Cpu {
         // Incrementing program counter is unnecessary for implicit addressing; revert addition at
         // call site.
         self.program_counter -= 1;
+        0
+    }
+
+    fn accumulator(&mut self) -> u8 {
+        // Incrementing program counter is unnecessary when operating on accumulator; revert
+        // addition at call site.
+        self.program_counter -= 1;
+        self.operate_on_accumulator = true;
         0
     }
 
@@ -450,6 +589,81 @@ mod tests {
         cpu.step(3);
         assert_eq!(cpu.accumulator, 0x8A);
         assert!(cpu.status.intersects(Status::V));
+    }
+
+    #[test]
+    fn bitshift() {
+        let program = vec![
+            // Basic left shift.
+            0xA9, 0x04, // LDA #$04
+            0x0A, // ASL A
+            // Basic right shift.
+            0xA9, 0x8A, // LDA #$8A
+            0x4A, // LSR A
+            // Left shift with carry.
+            0xA9, 0x8A, // LDA #$8A
+            0x0A, // ASL A
+            // Right shift with carry.
+            0xA9, 0x8F, // LDA #$8F
+            0x4A, // LSR A
+            // Rotate left.
+            0x18, // CLC
+            0xA9, 0x8A, // LDA #$8A
+            0x2A, // ROL A
+            0x2A, // ROL A
+            // Rotate right.
+            0x18, // CLC
+            0xA9, 0x8F, // LDA #$8F
+            0x6A, // ROR A
+            0x6A, // ROR A
+        ];
+        let mut cpu = setup(program);
+
+        // Test left shift.
+        // Shifting left should double the operand.
+        cpu.step(2);
+        assert_eq!(cpu.accumulator, 0x08);
+        assert!(!cpu.status.intersects(Status::C));
+
+        // Test right shift.
+        // Shifting right should halve the operand.
+        cpu.step(2);
+        assert_eq!(cpu.accumulator, 0x45);
+        assert!(!cpu.status.intersects(Status::C));
+
+        // Test left shift with carry.
+        // Bit 7 should be shifted into the carry flag.
+        cpu.step(2);
+        assert_eq!(cpu.accumulator, 0x14);
+        assert!(cpu.status.intersects(Status::C));
+
+        // Test right shift with carry.
+        // Bit 0 should be shifted into the carry flag.
+        cpu.step(2);
+        assert_eq!(cpu.accumulator, 0x47);
+        assert!(cpu.status.intersects(Status::C));
+
+        // Test left rotation.
+        // Bit 7 should be shifted into the carry flag.
+        cpu.step(3);
+        assert_eq!(cpu.accumulator, 0x14);
+        assert!(cpu.status.intersects(Status::C));
+
+        // The carry flag should be shifted into bit 0.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0x29);
+        assert!(!cpu.status.intersects(Status::C));
+
+        // Test right rotation.
+        // Bit 0 should be shifted into the carry flag.
+        cpu.step(3);
+        assert_eq!(cpu.accumulator, 0x47);
+        assert!(cpu.status.intersects(Status::C));
+
+        // The carry flag should be shifted into bit 7.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xA3);
+        assert!(cpu.status.intersects(Status::C));
     }
 
     #[test]
