@@ -10,7 +10,7 @@ pub use memory::Memory;
 
 #[inline]
 pub const fn is_bit_set(byte: u8, index: u8) -> bool {
-    (byte << index & 1) != 0
+    (byte >> index & 1) != 0
 }
 
 #[inline]
