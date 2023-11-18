@@ -1,5 +1,3 @@
-#![allow(clippy::all)]
-
 mod bus;
 pub mod cpu;
 mod memory;
