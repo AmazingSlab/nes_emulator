@@ -296,6 +296,36 @@ impl Cpu {
 
         concat_bytes(low, high)
     }
+
+    /// Powers the absolute,X and absolute,Y addressing modes.
+    fn absolute_indexed(&mut self, register: Register) -> u8 {
+        let address = self.read_u16();
+        let register = match register {
+            Register::X => self.x_register,
+            Register::Y => self.y_register,
+            Register::A => panic!("accumulator cannot be used for absolute indexing"),
+        };
+        self.absolute_address = address + register as u16;
+
+        // If the index result crosses a memory page, the instruction takes one extra cycle.
+        if high_byte(address) != high_byte(self.absolute_address) {
+            3
+        } else {
+            2
+        }
+    }
+
+    /// Powers the zero-page,X and zero-page,Y addressing modes.
+    fn zero_page_indexed(&mut self, register: Register) -> u8 {
+        let register = match register {
+            Register::X => self.x_register,
+            Register::Y => self.y_register,
+            Register::A => panic!("accumulator cannot be used for zero-page indexing"),
+        };
+        self.absolute_address = self.read(self.program_counter).wrapping_add(register) as u16;
+
+        2
+    }
 }
 
 /// Addressing mode implementations.
@@ -329,19 +359,11 @@ impl Cpu {
     }
 
     fn zero_page_x(&mut self) -> u8 {
-        self.absolute_address = self
-            .read(self.program_counter)
-            .wrapping_add(self.x_register) as u16;
-
-        2
+        self.zero_page_indexed(Register::X)
     }
 
     fn zero_page_y(&mut self) -> u8 {
-        self.absolute_address = self
-            .read(self.program_counter)
-            .wrapping_add(self.y_register) as u16;
-
-        2
+        self.zero_page_indexed(Register::Y)
     }
 
     fn relative(&mut self) -> u8 {
@@ -363,27 +385,11 @@ impl Cpu {
     }
 
     fn absolute_x(&mut self) -> u8 {
-        let address = self.read_u16();
-        self.absolute_address = address + self.x_register as u16;
-
-        // If the index result crosses a memory page, the instruction takes one extra cycle.
-        if high_byte(address) != high_byte(self.absolute_address) {
-            3
-        } else {
-            2
-        }
+        self.absolute_indexed(Register::X)
     }
 
     fn absolute_y(&mut self) -> u8 {
-        let address = self.read_u16();
-        self.absolute_address = address + self.y_register as u16;
-
-        // If the index result crosses a memory page, the instruction takes one extra cycle.
-        if high_byte(address) != high_byte(self.absolute_address) {
-            3
-        } else {
-            2
-        }
+        self.absolute_indexed(Register::Y)
     }
 
     fn indirect(&mut self) -> u8 {
