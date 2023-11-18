@@ -74,6 +74,7 @@ impl Cpu {
     pub fn execute(&mut self, instruction: CpuInstruction) -> u8 {
         self.program_counter += 1;
         let addr_mode_cycles = match instruction.addr_mode {
+            AddressingMode::Implicit => self.implicit(),
             AddressingMode::Immediate => self.immediate(),
             AddressingMode::ZeroPage => self.zero_page(),
             AddressingMode::ZeroPageX => self.zero_page_x(),
@@ -90,13 +91,52 @@ impl Cpu {
 
         self.program_counter += 1;
         let instruction_cycles = match instruction.instruction {
+            Instruction::Adc => self.adc(),
+            Instruction::Clc => self.clc(),
             Instruction::Lda => self.lda(),
             Instruction::Ldx => self.ldx(),
             Instruction::Ldy => self.ldy(),
+            Instruction::Sbc => self.sbc(),
+            Instruction::Sec => self.sec(),
+            Instruction::Sta => self.sta(),
+            Instruction::Stx => self.stx(),
+            Instruction::Sty => self.sty(),
             _ => todo!(),
         };
 
         addr_mode_cycles + instruction_cycles
+    }
+
+    /// Powers the ADC and SBC instructions.
+    fn add(&mut self, data: u8) -> u8 {
+        let result =
+            self.accumulator as u16 + data as u16 + self.status.intersects(Status::C) as u16;
+
+        let has_carry = result > 0xFF;
+        let result = result as u8;
+
+        let operands_have_same_sign = is_bit_set(self.accumulator, 7) == is_bit_set(data, 7);
+        let sum_has_different_sign = is_bit_set(self.accumulator, 7) != is_bit_set(result, 7);
+        let has_overflowed = operands_have_same_sign && sum_has_different_sign;
+
+        self.accumulator = result;
+
+        self.status.set(Status::C, has_carry);
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::V, has_overflowed);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        2
+    }
+
+    pub fn adc(&mut self) -> u8 {
+        let data = self.read(self.absolute_address);
+        self.add(data)
+    }
+
+    pub fn clc(&mut self) -> u8 {
+        self.status.set(Status::C, false);
+        2
     }
 
     pub fn lda(&mut self) -> u8 {
@@ -128,6 +168,33 @@ impl Cpu {
 
         2
     }
+
+    pub fn sbc(&mut self) -> u8 {
+        let data = self.read(self.absolute_address);
+
+        // Subtracting is the same as adding the inverse.
+        self.add(!data)
+    }
+
+    pub fn sec(&mut self) -> u8 {
+        self.status.set(Status::C, true);
+        2
+    }
+
+    pub fn sta(&mut self) -> u8 {
+        self.write(self.absolute_address, self.accumulator);
+        2
+    }
+
+    pub fn stx(&mut self) -> u8 {
+        self.write(self.absolute_address, self.x_register);
+        2
+    }
+
+    pub fn sty(&mut self) -> u8 {
+        self.write(self.absolute_address, self.y_register);
+        2
+    }
 }
 
 /// Addressing mode implementations.
@@ -135,6 +202,13 @@ impl Cpu {
 /// Return value represents the added cycle cost of each mode, separate from the cost of the
 /// instructions themselves.
 impl Cpu {
+    pub fn implicit(&mut self) -> u8 {
+        // Incrementing program counter is unnecessary for implicit addressing; revert addition at
+        // call site.
+        self.program_counter -= 1;
+        0
+    }
+
     pub fn immediate(&mut self) -> u8 {
         self.absolute_address = self.program_counter;
         0
@@ -318,6 +392,65 @@ mod tests {
     use crate::Memory;
 
     use super::*;
+
+    #[test]
+    fn arithmetic() {
+        let program = vec![
+            // Basic addition.
+            0x18, // CLC
+            0xA9, 0x02, // LDA #$02
+            0x69, 0x03, // ADC #$03
+            // Basic subtraction.
+            0x38, // SEC
+            0xA9, 0x0F, // LDA #$0F
+            0xE9, 0x08, // SBC #$08
+            // 16-bit addition.
+            0x18, // CLC
+            0xA9, 0x80, // LDA #$80 ; Load low byte of first operand.
+            0x69, 0x95, // ADC #$95 ; Add low byte of second operand.
+            0x85, 0xFE, // STA $FE ; Store low byte of result.
+            0xA9, 0x01, // LDA #$01 ; Load high byte of first operand.
+            0x69, 0x01, // ADC #$01 ; Add high byte of second operand.
+            0x85, 0xFF, // STA $FF ; Store high byte of result.
+            // Signed addition.
+            0x18, // CLC
+            0xA9, 0x45, // LDA #$45
+            0x69, 0x45, // ADC #$45
+        ];
+        let mut cpu = setup(program);
+
+        // Test basic addition.
+        // 2 + 3 = 5.
+        cpu.step(3);
+        assert_eq!(cpu.accumulator, 5);
+        assert!(!cpu.status.intersects(Status::C));
+        assert!(!cpu.status.intersects(Status::V));
+
+        // Test basic subtraction.
+        // 15 - 8 = 7.
+        cpu.step(3);
+        assert_eq!(cpu.accumulator, 7);
+        assert!(cpu.status.intersects(Status::C));
+        assert!(!cpu.status.intersects(Status::V));
+
+        // Test 16-bit addition.
+        // 0x180 + 0x195 = 0x315.
+        cpu.step(7);
+        let low = cpu.read(0xFE);
+        let high = cpu.read(0xFF);
+        let result = concat_bytes(low, high);
+        assert_eq!(result, 0x315);
+        assert!(!cpu.status.intersects(Status::V));
+
+        // Test signed overflow.
+        // The overflow flag is set when adding two values with the same sign results in a value
+        // with a different sign. For example, adding the positive values 0x45 and 0x45 results in
+        // 0x8A, which has the sign bit set even though the result should also be positive.
+        // This flag is only meaningful when operating on signed values.
+        cpu.step(3);
+        assert_eq!(cpu.accumulator, 0x8A);
+        assert!(cpu.status.intersects(Status::V));
+    }
 
     #[test]
     fn addressing_modes() {
