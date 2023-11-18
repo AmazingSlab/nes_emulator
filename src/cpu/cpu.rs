@@ -135,31 +135,33 @@ impl Cpu {
         2
     }
 
-    fn adc(&mut self) -> u8 {
-        let data = self.read(self.absolute_address);
-        self.add(data)
-    }
-
-    fn and(&mut self) -> u8 {
-        let data = self.read(self.absolute_address);
-        let result = self.accumulator & data;
-        self.accumulator = result;
-
-        self.status.set(Status::Z, result == 0);
-        self.status.set(Status::N, is_bit_set(result, 7));
-
-        2
-    }
-
-    fn asl(&mut self) -> u8 {
+    /// Powers the ASL, LSR, ROL, and ROR instructions.
+    fn shift(&mut self, direction: ShiftDirection, rotate: bool) -> u8 {
         let data = if self.operate_on_accumulator {
             self.accumulator
         } else {
             self.read(self.absolute_address)
         };
 
-        let carry = is_bit_set(data, 7);
-        let result = data << 1;
+        let carry_index = match direction {
+            ShiftDirection::Left => 7,
+            ShiftDirection::Right => 0,
+        };
+        let carry = is_bit_set(data, carry_index);
+
+        let result = match direction {
+            ShiftDirection::Left => data << 1,
+            ShiftDirection::Right => data >> 1,
+        };
+        let result = if rotate {
+            let carry_shift = match direction {
+                ShiftDirection::Left => 0,
+                ShiftDirection::Right => 7,
+            };
+            result + ((self.status.intersects(Status::C) as u8) << carry_shift)
+        } else {
+            result
+        };
 
         if self.operate_on_accumulator {
             self.accumulator = result;
@@ -177,6 +179,26 @@ impl Cpu {
         } else {
             4
         }
+    }
+
+    fn adc(&mut self) -> u8 {
+        let data = self.read(self.absolute_address);
+        self.add(data)
+    }
+
+    fn and(&mut self) -> u8 {
+        let data = self.read(self.absolute_address);
+        let result = self.accumulator & data;
+        self.accumulator = result;
+
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        2
+    }
+
+    fn asl(&mut self) -> u8 {
+        self.shift(ShiftDirection::Left, false)
     }
 
     fn clc(&mut self) -> u8 {
@@ -215,89 +237,15 @@ impl Cpu {
     }
 
     fn lsr(&mut self) -> u8 {
-        let data = if self.operate_on_accumulator {
-            self.accumulator
-        } else {
-            self.read(self.absolute_address)
-        };
-
-        let carry = is_bit_set(data, 0);
-        let result = data >> 1;
-
-        if self.operate_on_accumulator {
-            self.accumulator = result;
-        } else {
-            self.write(self.absolute_address, result);
-        }
-
-        self.status.set(Status::C, carry);
-        self.status.set(Status::Z, result == 0);
-        self.status.set(Status::N, is_bit_set(result, 7));
-
-        if self.operate_on_accumulator {
-            self.operate_on_accumulator = false;
-            2
-        } else {
-            4
-        }
+        self.shift(ShiftDirection::Right, false)
     }
 
     fn rol(&mut self) -> u8 {
-        let data = if self.operate_on_accumulator {
-            self.accumulator
-        } else {
-            self.read(self.absolute_address)
-        };
-
-        let carry = is_bit_set(data, 7);
-        let result = data << 1;
-        let result = result + self.status.intersects(Status::C) as u8;
-
-        if self.operate_on_accumulator {
-            self.accumulator = result;
-        } else {
-            self.write(self.absolute_address, result);
-        }
-
-        self.status.set(Status::C, carry);
-        self.status.set(Status::Z, result == 0);
-        self.status.set(Status::N, is_bit_set(result, 7));
-
-        if self.operate_on_accumulator {
-            self.operate_on_accumulator = false;
-            2
-        } else {
-            4
-        }
+        self.shift(ShiftDirection::Left, true)
     }
 
     fn ror(&mut self) -> u8 {
-        let data = if self.operate_on_accumulator {
-            self.accumulator
-        } else {
-            self.read(self.absolute_address)
-        };
-
-        let carry = is_bit_set(data, 0);
-        let result = data >> 1;
-        let result = result + ((self.status.intersects(Status::C) as u8) << 7);
-
-        if self.operate_on_accumulator {
-            self.accumulator = result;
-        } else {
-            self.write(self.absolute_address, result);
-        }
-
-        self.status.set(Status::C, carry);
-        self.status.set(Status::Z, result == 0);
-        self.status.set(Status::N, is_bit_set(result, 7));
-
-        if self.operate_on_accumulator {
-            self.operate_on_accumulator = false;
-            2
-        } else {
-            4
-        }
+        self.shift(ShiftDirection::Right, true)
     }
 
     fn sbc(&mut self) -> u8 {
@@ -499,6 +447,13 @@ pub enum AddressingMode {
     Indirect,
     IndexedIndirect,
     IndirectIndexed,
+}
+
+/// The direction to perform bitshift operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShiftDirection {
+    Left,
+    Right,
 }
 
 bitflags::bitflags! {
