@@ -139,6 +139,21 @@ impl Cpu {
         2
     }
 
+    /// Powers the LDA, LDX, and LDY instructions.
+    fn load(&mut self, register: Register) -> u8 {
+        let data = self.read(self.absolute_address);
+        match register {
+            Register::A => self.accumulator = data,
+            Register::X => self.x_register = data,
+            Register::Y => self.y_register = data,
+        }
+
+        self.status.set(Status::Z, data == 0);
+        self.status.set(Status::N, is_bit_set(data, 7));
+
+        2
+    }
+
     /// Powers the ASL, LSR, ROL, and ROR instructions.
     fn shift(&mut self, direction: ShiftDirection, rotate: bool) -> u8 {
         let data = if self.operate_on_accumulator {
@@ -211,33 +226,15 @@ impl Cpu {
     }
 
     fn lda(&mut self) -> u8 {
-        let data = self.read(self.absolute_address);
-        self.accumulator = data;
-
-        self.status.set(Status::Z, data == 0);
-        self.status.set(Status::N, is_bit_set(data, 7));
-
-        2
+        self.load(Register::A)
     }
 
     fn ldx(&mut self) -> u8 {
-        let data = self.read(self.absolute_address);
-        self.x_register = data;
-
-        self.status.set(Status::Z, data == 0);
-        self.status.set(Status::N, is_bit_set(data, 7));
-
-        2
+        self.load(Register::X)
     }
 
     fn ldy(&mut self) -> u8 {
-        let data = self.read(self.absolute_address);
-        self.y_register = data;
-
-        self.status.set(Status::Z, data == 0);
-        self.status.set(Status::N, is_bit_set(data, 7));
-
-        2
+        self.load(Register::Y)
     }
 
     fn lsr(&mut self) -> u8 {
@@ -458,6 +455,14 @@ pub enum AddressingMode {
 enum ShiftDirection {
     Left,
     Right,
+}
+
+/// The register to perform certain operations on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Register {
+    A,
+    X,
+    Y,
 }
 
 bitflags::bitflags! {
