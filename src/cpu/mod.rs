@@ -22,6 +22,7 @@ pub struct Cpu {
     absolute_address: u16,
     bus: Rc<RefCell<Bus>>,
     operate_on_accumulator: bool,
+    branch_will_cross_page: bool,
 }
 
 impl Cpu {
@@ -96,12 +97,24 @@ impl Cpu {
             Instruction::Adc => self.adc(),
             Instruction::And => self.and(),
             Instruction::Asl => self.asl(),
+            Instruction::Bcc => self.bcc(),
+            Instruction::Bcs => self.bcs(),
+            Instruction::Beq => self.beq(),
+            Instruction::Bmi => self.bmi(),
+            Instruction::Bne => self.bne(),
+            Instruction::Bpl => self.bpl(),
+            Instruction::Bvc => self.bvc(),
+            Instruction::Bvs => self.bvs(),
             Instruction::Clc => self.clc(),
+            Instruction::Dex => self.dex(),
             Instruction::Eor => self.eor(),
+            Instruction::Iny => self.iny(),
+            Instruction::Jmp => self.jmp(),
             Instruction::Lda => self.lda(),
             Instruction::Ldx => self.ldx(),
             Instruction::Ldy => self.ldy(),
             Instruction::Lsr => self.lsr(),
+            Instruction::Nop => self.nop(),
             Instruction::Ora => self.ora(),
             Instruction::Rol => self.rol(),
             Instruction::Ror => self.ror(),
@@ -152,6 +165,38 @@ impl Cpu {
         self.status.set(Status::N, is_bit_set(result, 7));
 
         2
+    }
+
+    /// Powers the BCC, BCS, BEQ, BMI, BNE, BPL, BVC, and BVS instructions.
+    fn branch(&mut self, branch_condition: BranchCondition) -> u8 {
+        let condition_met = match branch_condition {
+            BranchCondition::CarrySet => self.status.intersects(Status::C),
+            BranchCondition::CarryClear => !self.status.intersects(Status::C),
+            BranchCondition::Equal => self.status.intersects(Status::Z),
+            BranchCondition::NotEqual => !self.status.intersects(Status::Z),
+            BranchCondition::Minus => self.status.intersects(Status::N),
+            BranchCondition::Plus => !self.status.intersects(Status::N),
+            BranchCondition::OverflowSet => self.status.intersects(Status::V),
+            BranchCondition::OverflowClear => !self.status.intersects(Status::V),
+        };
+
+        // Always reset flag regardless of whether the branch was taken.
+        // For cases where a potentially page-crossing branch was not taken, this flag should still
+        // be reset to not falsely incur a cycle cost for the next branch instruction.
+        let will_cross_page = self.branch_will_cross_page;
+        self.branch_will_cross_page = false;
+
+        if condition_met {
+            self.program_counter = self.absolute_address + 1;
+            // If the target address crosses a memory page, the instruction takes one extra cycle.
+            if will_cross_page {
+                3
+            } else {
+                2
+            }
+        } else {
+            1
+        }
     }
 
     /// Powers the LDA, LDX, and LDY instructions.
@@ -234,13 +279,64 @@ impl Cpu {
         self.shift(ShiftDirection::Left, false)
     }
 
+    fn bcc(&mut self) -> u8 {
+        self.branch(BranchCondition::CarryClear)
+    }
+
+    fn bcs(&mut self) -> u8 {
+        self.branch(BranchCondition::CarrySet)
+    }
+
+    fn beq(&mut self) -> u8 {
+        self.branch(BranchCondition::Equal)
+    }
+
+    fn bmi(&mut self) -> u8 {
+        self.branch(BranchCondition::Minus)
+    }
+
+    fn bne(&mut self) -> u8 {
+        self.branch(BranchCondition::NotEqual)
+    }
+
+    fn bpl(&mut self) -> u8 {
+        self.branch(BranchCondition::Plus)
+    }
+
+    fn bvc(&mut self) -> u8 {
+        self.branch(BranchCondition::OverflowClear)
+    }
+
+    fn bvs(&mut self) -> u8 {
+        self.branch(BranchCondition::OverflowSet)
+    }
+
     fn clc(&mut self) -> u8 {
         self.status.set(Status::C, false);
         2
     }
 
+    fn dex(&mut self) -> u8 {
+        self.x_register -= 1;
+        self.status.set(Status::Z, self.x_register == 0);
+        self.status.set(Status::N, is_bit_set(self.x_register, 7));
+        2
+    }
+
     fn eor(&mut self) -> u8 {
         self.bitwise(BitwiseOperation::Xor)
+    }
+
+    fn iny(&mut self) -> u8 {
+        self.y_register += 1;
+        self.status.set(Status::Z, self.y_register == 0);
+        self.status.set(Status::N, is_bit_set(self.y_register, 7));
+        2
+    }
+
+    fn jmp(&mut self) -> u8 {
+        self.program_counter = self.absolute_address;
+        1
     }
 
     fn lda(&mut self) -> u8 {
@@ -257,6 +353,10 @@ impl Cpu {
 
     fn lsr(&mut self) -> u8 {
         self.shift(ShiftDirection::Right, false)
+    }
+
+    fn nop(&mut self) -> u8 {
+        2
     }
 
     fn ora(&mut self) -> u8 {
@@ -386,16 +486,16 @@ impl Cpu {
     }
 
     fn relative(&mut self) -> u8 {
-        let offset = self.read(self.program_counter) as i16;
-        let address = self.absolute_address.wrapping_add_signed(offset);
+        let offset = self.read(self.program_counter) as i8 as i16;
+        let address = self.program_counter.wrapping_add_signed(offset);
         self.absolute_address = address;
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
-        if high_byte(address) != high_byte(self.absolute_address) {
-            2
-        } else {
-            1
+        if high_byte(address) != high_byte(self.program_counter) {
+            self.branch_will_cross_page = true;
         }
+
+        1
     }
 
     fn absolute(&mut self) -> u8 {
@@ -475,6 +575,18 @@ enum BitwiseOperation {
     And,
     Or,
     Xor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BranchCondition {
+    CarryClear,
+    CarrySet,
+    Equal,
+    Minus,
+    NotEqual,
+    Plus,
+    OverflowClear,
+    OverflowSet,
 }
 
 /// The direction to perform bitshift operations.
@@ -655,6 +767,67 @@ mod tests {
         cpu.execute_next();
         assert_eq!(cpu.accumulator, 0xA3);
         assert!(cpu.status.intersects(Status::C));
+    }
+
+    #[test]
+    fn branches() {
+        let program = vec![
+            // Basic for loop.
+            0xA0, 0x00, // LDY #00
+            0xA2, 0x0A, // LDX #10
+            0xC8, // LOOP: INY ; Loop 10 times.
+            0xCA, // DEX
+            0xD0, 0xFC, // BNE LOOP
+            0xA9, 0xFF, // LDA #$FF
+            // Cross-page branching.
+            0xA9, 0x00, // LDA #$00
+            0xD0, 0x80, // BNE *-128
+            0xF0, 0x00, // BEQ *+0 ; Effectively a NOP.
+            0xF0, 0x80, // BEQ *-128
+        ];
+        let mut cpu = setup(program);
+
+        // Test basic for loop.
+        // Run the loop once.
+        // Branch instructions should take 3 cycles when the branch is taken.
+        assert_eq!(3, cpu.step(5));
+        assert_eq!(cpu.program_counter, 0x04);
+        assert_eq!(cpu.accumulator, 0x00);
+        assert_eq!(cpu.x_register, 0x09);
+        assert_eq!(cpu.y_register, 0x01);
+
+        // Run the loop 3 more times.
+        cpu.step(9);
+        assert_eq!(cpu.program_counter, 0x04);
+        assert_eq!(cpu.accumulator, 0x00);
+        assert_eq!(cpu.x_register, 0x06);
+        assert_eq!(cpu.y_register, 0x04);
+
+        // Run the loop the last 6 times.
+        // Branch instructions should take 2 cycles when the branch is not taken.
+        assert_eq!(2, cpu.step(18));
+        assert_eq!(cpu.program_counter, 0x08);
+        assert_eq!(cpu.accumulator, 0x00);
+        assert_eq!(cpu.x_register, 0x00);
+        assert_eq!(cpu.y_register, 0x0A);
+
+        // Run the last load instruction.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xFF);
+
+        // Test cross-page branching.
+        // Should take 2 cycles when not taking branch.
+        assert_eq!(2, cpu.step(2));
+        assert_eq!(cpu.program_counter, 0x000E);
+
+        // Should take 3 cycles when taking branch, even if the previous branch would have crossed a
+        // page if taken.
+        assert_eq!(3, cpu.execute_next());
+        assert_eq!(cpu.program_counter, 0x0010);
+
+        // Should take 4 cycles when taking a page-crossing branch.
+        assert_eq!(4, cpu.execute_next());
+        assert_eq!(cpu.program_counter, 0xFF92);
     }
 
     #[test]
