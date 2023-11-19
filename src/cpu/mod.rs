@@ -15,8 +15,7 @@ pub struct Cpu {
     x_register: u8,
     y_register: u8,
     program_counter: u16,
-    #[allow(dead_code)]
-    stack_pointer: u8,
+    _stack_pointer: u8,
     status: Status,
 
     absolute_address: u16,
