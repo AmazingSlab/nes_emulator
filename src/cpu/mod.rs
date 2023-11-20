@@ -179,16 +179,10 @@ impl Cpu {
             BranchCondition::OverflowClear => !self.status.intersects(Status::V),
         };
 
-        // Always reset flag regardless of whether the branch was taken.
-        // For cases where a potentially page-crossing branch was not taken, this flag should still
-        // be reset to not falsely incur a cycle cost for the next branch instruction.
-        let will_cross_page = self.branch_will_cross_page;
-        self.branch_will_cross_page = false;
-
         if condition_met {
             self.program_counter = self.absolute_address + 1;
             // If the target address crosses a memory page, the instruction takes one extra cycle.
-            if will_cross_page {
+            if self.branch_will_cross_page {
                 3
             } else {
                 2
@@ -489,11 +483,9 @@ impl Cpu {
         let address = self.program_counter.wrapping_add_signed(offset);
         self.absolute_address = address;
 
-        // If the index result crosses a memory page, the instruction takes one extra cycle.
-        if high_byte(address) != high_byte(self.program_counter) {
-            self.branch_will_cross_page = true;
-        }
-
+        // If the target address crosses a memory page, the instruction can potentially take one
+        // extra cycle.
+        self.branch_will_cross_page = high_byte(address) != high_byte(self.program_counter);
         1
     }
 
