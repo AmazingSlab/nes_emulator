@@ -22,6 +22,7 @@ pub struct Cpu {
     bus: Rc<RefCell<Bus>>,
     operate_on_accumulator: bool,
     branch_will_cross_page: bool,
+    address_will_cross_page: bool,
 }
 
 impl Cpu {
@@ -105,8 +106,12 @@ impl Cpu {
             Instruction::Bvc => self.bvc(),
             Instruction::Bvs => self.bvs(),
             Instruction::Clc => self.clc(),
+            Instruction::Dec => self.dec(),
             Instruction::Dex => self.dex(),
+            Instruction::Dey => self.dey(),
             Instruction::Eor => self.eor(),
+            Instruction::Inc => self.inc(),
+            Instruction::Inx => self.inx(),
             Instruction::Iny => self.iny(),
             Instruction::Jmp => self.jmp(),
             Instruction::Lda => self.lda(),
@@ -126,6 +131,24 @@ impl Cpu {
         };
 
         addr_mode_cycles + instruction_cycles
+    }
+
+    /// Returns the value stored in a given register.
+    fn get_register(&self, register: Register) -> u8 {
+        match register {
+            Register::A => self.accumulator,
+            Register::X => self.x_register,
+            Register::Y => self.y_register,
+        }
+    }
+
+    /// Sets a register to the given value.
+    fn set_register(&mut self, register: Register, value: u8) {
+        match register {
+            Register::A => self.accumulator = value,
+            Register::X => self.x_register = value,
+            Register::Y => self.y_register = value,
+        }
     }
 
     /// Powers the ADC and SBC instructions.
@@ -192,14 +215,36 @@ impl Cpu {
         }
     }
 
+    /// Powers the DEC, DEX, DEY, INC, INX, and INY instructions.
+    fn increment(&mut self, register: Option<Register>, value: i8) -> u8 {
+        let cycles;
+        let result = if let Some(register) = register {
+            let data = self.get_register(register);
+            let result = data.wrapping_add_signed(value);
+            self.set_register(register, result);
+
+            cycles = 2;
+            result
+        } else {
+            let data = self.read(self.absolute_address);
+            let result = data.wrapping_add_signed(value);
+            self.write(self.absolute_address, result);
+
+            // This instruction should always take the page crossing penalty when using indexed
+            // absolute addresing.
+            cycles = 4 + !self.address_will_cross_page as u8;
+            result
+        };
+
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+        cycles
+    }
+
     /// Powers the LDA, LDX, and LDY instructions.
     fn load(&mut self, register: Register) -> u8 {
         let data = self.read(self.absolute_address);
-        match register {
-            Register::A => self.accumulator = data,
-            Register::X => self.x_register = data,
-            Register::Y => self.y_register = data,
-        }
+        self.set_register(register, data);
 
         self.status.set(Status::Z, data == 0);
         self.status.set(Status::N, is_bit_set(data, 7));
@@ -309,22 +354,32 @@ impl Cpu {
         2
     }
 
+    fn dec(&mut self) -> u8 {
+        self.increment(None, -1)
+    }
+
     fn dex(&mut self) -> u8 {
-        self.x_register -= 1;
-        self.status.set(Status::Z, self.x_register == 0);
-        self.status.set(Status::N, is_bit_set(self.x_register, 7));
-        2
+        self.increment(Some(Register::X), -1)
+    }
+
+    fn dey(&mut self) -> u8 {
+        self.increment(Some(Register::Y), -1)
     }
 
     fn eor(&mut self) -> u8 {
         self.bitwise(BitwiseOperation::Xor)
     }
 
+    fn inc(&mut self) -> u8 {
+        self.increment(None, 1)
+    }
+
+    fn inx(&mut self) -> u8 {
+        self.increment(Some(Register::X), 1)
+    }
+
     fn iny(&mut self) -> u8 {
-        self.y_register += 1;
-        self.status.set(Status::Z, self.y_register == 0);
-        self.status.set(Status::N, is_bit_set(self.y_register, 7));
-        2
+        self.increment(Some(Register::Y), 1)
     }
 
     fn jmp(&mut self) -> u8 {
@@ -412,15 +467,12 @@ impl Cpu {
     /// Powers the absolute,X and absolute,Y addressing modes.
     fn absolute_indexed(&mut self, register: Register) -> u8 {
         let address = self.read_u16();
-        let register = match register {
-            Register::X => self.x_register,
-            Register::Y => self.y_register,
-            Register::A => panic!("accumulator cannot be used for absolute indexing"),
-        };
+        let register = self.get_register(register);
         self.absolute_address = address + register as u16;
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
-        if high_byte(address) != high_byte(self.absolute_address) {
+        self.address_will_cross_page = high_byte(address) != high_byte(self.absolute_address);
+        if self.address_will_cross_page {
             3
         } else {
             2
@@ -429,11 +481,7 @@ impl Cpu {
 
     /// Powers the zero-page,X and zero-page,Y addressing modes.
     fn zero_page_indexed(&mut self, register: Register) -> u8 {
-        let register = match register {
-            Register::X => self.x_register,
-            Register::Y => self.y_register,
-            Register::A => panic!("accumulator cannot be used for zero-page indexing"),
-        };
+        let register = self.get_register(register);
         self.absolute_address = self.read(self.program_counter).wrapping_add(register) as u16;
 
         2
@@ -819,6 +867,49 @@ mod tests {
         // Should take 4 cycles when taking a page-crossing branch.
         assert_eq!(4, cpu.execute_next());
         assert_eq!(cpu.program_counter, 0xFF92);
+    }
+
+    #[test]
+    fn incrementing() {
+        let program = vec![
+            // Basic incrementing/decrementing.
+            0xE8, // INX
+            0xC8, // INY
+            0xCA, // DEX
+            0x88, // DEY
+            // Increment/decrement memory locations.
+            0xFE, 0xFF, 0x00, // INC $00FF,X
+            0xDE, 0xFF, 0x00, // DEC $00FF,X
+            0xA2, 0x10, // LDX #$10
+            0xFE, 0xFF, 0x00, // INC $00FF,X
+        ];
+        let mut cpu = setup(program);
+
+        // Test basic incrementing.
+        assert_eq!(2, cpu.execute_next());
+        assert_eq!(cpu.x_register, 0x01);
+
+        assert_eq!(2, cpu.execute_next());
+        assert_eq!(cpu.y_register, 0x01);
+
+        // Test basic decrementing.
+        assert_eq!(2, cpu.execute_next());
+        assert_eq!(cpu.x_register, 0x00);
+
+        assert_eq!(2, cpu.execute_next());
+        assert_eq!(cpu.y_register, 0x00);
+
+        // Indexed absolute addressing should always take 7 cycles, even if no page boundary was
+        // crossed.
+        assert_eq!(7, cpu.execute_next());
+        assert_eq!(cpu.read(0xFF), 0x01);
+
+        assert_eq!(7, cpu.execute_next());
+        assert_eq!(cpu.read(0xFF), 0x00);
+
+        // Indexed absolute addressing should always take 7 cycles with page crossing.
+        assert_eq!(7, cpu.step(2));
+        assert_eq!(cpu.read(0x10F), 0x01);
     }
 
     #[test]
