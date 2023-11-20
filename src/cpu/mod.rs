@@ -100,6 +100,7 @@ impl Cpu {
             Instruction::Bcc => self.bcc(),
             Instruction::Bcs => self.bcs(),
             Instruction::Beq => self.beq(),
+            Instruction::Bit => self.bit(),
             Instruction::Bmi => self.bmi(),
             Instruction::Bne => self.bne(),
             Instruction::Bpl => self.bpl(),
@@ -327,6 +328,17 @@ impl Cpu {
 
     fn beq(&mut self) -> u8 {
         self.branch(BranchCondition::Equal)
+    }
+
+    fn bit(&mut self) -> u8 {
+        let data = self.read(self.absolute_address);
+        let result = self.accumulator & data;
+
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::V, is_bit_set(data, 6));
+        self.status.set(Status::N, is_bit_set(data, 7));
+
+        2
     }
 
     fn bmi(&mut self) -> u8 {
