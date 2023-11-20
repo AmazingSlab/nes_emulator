@@ -15,7 +15,7 @@ pub struct Cpu {
     x_register: u8,
     y_register: u8,
     program_counter: u16,
-    _stack_pointer: u8,
+    stack_pointer: u8,
     status: Status,
 
     absolute_address: u16,
@@ -128,6 +128,12 @@ impl Cpu {
             Instruction::Sta => self.sta(),
             Instruction::Stx => self.stx(),
             Instruction::Sty => self.sty(),
+            Instruction::Tax => self.tax(),
+            Instruction::Tay => self.tay(),
+            Instruction::Tsx => self.tsx(),
+            Instruction::Txa => self.txa(),
+            Instruction::Txs => self.txs(),
+            Instruction::Tya => self.tya(),
             _ => todo!(),
         };
 
@@ -298,6 +304,33 @@ impl Cpu {
             4
         }
     }
+
+    /// Powers the TAX, TAY, TSX, TXA, TXS, TYA instructions.
+    fn transfer(&mut self, source: Option<Register>, destination: Option<Register>) -> u8 {
+        let result = match (source, destination) {
+            (Some(source), Some(destination)) => {
+                let data = self.get_register(source);
+                self.set_register(destination, data);
+                data
+            }
+            (None, Some(destination)) => {
+                let data = self.stack_pointer;
+                self.set_register(destination, data);
+                data
+            }
+            (Some(source), None) => {
+                self.stack_pointer = self.get_register(source);
+                // Transfering to stack pointer should not update status register.
+                return 2;
+            }
+            (None, None) => panic!("must specify at least one register to transfer to/from"),
+        };
+
+        self.status.set(Status::Z, result == 0);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        2
+    }
 }
 
 /// Instruction implementations.
@@ -456,6 +489,30 @@ impl Cpu {
     fn sty(&mut self) -> u8 {
         self.write(self.absolute_address, self.y_register);
         2
+    }
+
+    fn tax(&mut self) -> u8 {
+        self.transfer(Some(Register::A), Some(Register::X))
+    }
+
+    fn tay(&mut self) -> u8 {
+        self.transfer(Some(Register::A), Some(Register::Y))
+    }
+
+    fn tsx(&mut self) -> u8 {
+        self.transfer(None, Some(Register::X))
+    }
+
+    fn txa(&mut self) -> u8 {
+        self.transfer(Some(Register::X), Some(Register::A))
+    }
+
+    fn txs(&mut self) -> u8 {
+        self.transfer(Some(Register::X), None)
+    }
+
+    fn tya(&mut self) -> u8 {
+        self.transfer(Some(Register::Y), Some(Register::A))
     }
 }
 
