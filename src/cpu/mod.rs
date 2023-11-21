@@ -121,6 +121,10 @@ impl Cpu {
             Instruction::Lsr => self.lsr(),
             Instruction::Nop => self.nop(),
             Instruction::Ora => self.ora(),
+            Instruction::Pha => self.pha(),
+            Instruction::Php => self.php(),
+            Instruction::Pla => self.pla(),
+            Instruction::Plp => self.plp(),
             Instruction::Rol => self.rol(),
             Instruction::Ror => self.ror(),
             Instruction::Sbc => self.sbc(),
@@ -156,6 +160,20 @@ impl Cpu {
             Register::X => self.x_register = value,
             Register::Y => self.y_register = value,
         }
+    }
+
+    /// Pushes a value to the stack.
+    fn push(&mut self, value: u8) {
+        let stack_address = 0x0100 + self.stack_pointer as u16;
+        self.write(stack_address, value);
+        self.stack_pointer -= 1;
+    }
+
+    /// Pulls a value off the stack.
+    fn pull(&mut self) -> u8 {
+        self.stack_pointer += 1;
+        let stack_address = 0x0100 + self.stack_pointer as u16;
+        self.read(stack_address)
     }
 
     /// Powers the ADC and SBC instructions.
@@ -454,6 +472,33 @@ impl Cpu {
 
     fn ora(&mut self) -> u8 {
         self.bitwise(BitwiseOperation::Or)
+    }
+
+    fn pha(&mut self) -> u8 {
+        self.push(self.accumulator);
+        3
+    }
+
+    fn php(&mut self) -> u8 {
+        // The break flag and bit 5 are set when pushing.
+        let status = (self.status | Status::B).bits() | 1 << 5;
+        self.push(status);
+        3
+    }
+
+    fn pla(&mut self) -> u8 {
+        let data = self.pull();
+        self.accumulator = data;
+        self.status.set(Status::Z, data == 0);
+        self.status.set(Status::N, is_bit_set(data, 7));
+        4
+    }
+
+    fn plp(&mut self) -> u8 {
+        let status = self.pull();
+        // The break flag and bit 5 are unset when pulling.
+        self.status = Status::from_bits_retain(status & !(1 << 5)) & !Status::B;
+        4
     }
 
     fn rol(&mut self) -> u8 {
@@ -979,6 +1024,69 @@ mod tests {
         // Indexed absolute addressing should always take 7 cycles with page crossing.
         assert_eq!(7, cpu.step(2));
         assert_eq!(cpu.read(0x10F), 0x01);
+    }
+
+    #[test]
+    fn stack() {
+        let program = vec![
+            // Transfering to stack pointer.
+            0xA2, 0xFF, // LDX #$FF
+            0xA9, 0x01, // LDA #$01
+            0x9A, // TXS
+            // Pushing and pulling accumulator.
+            0x48, // PHA
+            0xA9, 0xFF, // LDA #$FF
+            0x68, // PLA
+            // Pushing and pulling status register.
+            0x08, // PHP
+            0xA9, 0xFF, // LDA #$FF
+            0x28, // PLP
+        ];
+        let mut cpu = setup(program);
+
+        // Stack pointer should be 0xFF while the status register is unchanged from the previous
+        // load.
+        cpu.step(3);
+        assert_eq!(cpu.stack_pointer, 0xFF);
+        assert!(!cpu.status.intersects(Status::Z));
+        assert!(!cpu.status.intersects(Status::N));
+
+        // The stack should now contain the value of the accumulator (0x01).
+        assert_eq!(3, cpu.execute_next());
+        assert_eq!(cpu.stack_pointer, 0xFE);
+        assert_eq!(cpu.read(0x01FF), 0x01);
+
+        // Load a new value into accumulator.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xFF);
+        assert!(cpu.status.intersects(Status::N));
+
+        // The stack should now be empty, and the accumulator should contain what was on the stack.
+        assert_eq!(4, cpu.execute_next());
+        assert_eq!(cpu.stack_pointer, 0xFF);
+        assert_eq!(cpu.accumulator, 0x01);
+        assert!(!cpu.status.intersects(Status::N));
+
+        // The stack should now contain the status register with the break flag and bit 5 set.
+        assert_eq!(3, cpu.execute_next());
+        assert_eq!(cpu.stack_pointer, 0xFE);
+        let status = Status::from_bits_retain(cpu.read(0x01FF));
+        assert!(!status.intersects(Status::N));
+        assert!(status.intersects(Status::B));
+        assert!(status.bits() & 1 << 5 != 0);
+
+        // Load a value to modify status register.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xFF);
+        assert!(cpu.status.intersects(Status::N));
+
+        // The stack should now be empty, and the status register should be restored with the break
+        // flag and bit 5 unset.
+        assert_eq!(4, cpu.execute_next());
+        assert_eq!(cpu.stack_pointer, 0xFF);
+        assert!(!cpu.status.intersects(Status::N));
+        assert!(!cpu.status.intersects(Status::B));
+        assert!(cpu.status.bits() & 1 << 5 == 0);
     }
 
     #[test]
