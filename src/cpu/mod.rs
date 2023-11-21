@@ -241,6 +241,9 @@ impl Cpu {
     }
 
     /// Powers the DEC, DEX, DEY, INC, INX, and INY instructions.
+    ///
+    /// A `None` register value represents operating on a memory location.
+    /// Decrementing is achieved with a negative value.
     fn increment(&mut self, register: Option<Register>, value: i8) -> u8 {
         let cycles;
         let result = if let Some(register) = register {
@@ -324,6 +327,8 @@ impl Cpu {
     }
 
     /// Powers the TAX, TAY, TSX, TXA, TXS, TYA instructions.
+    ///
+    /// A `None` register value represents operations on the stack pointer.
     fn transfer(&mut self, source: Option<Register>, destination: Option<Register>) -> u8 {
         let result = match (source, destination) {
             (Some(source), Some(destination)) => {
