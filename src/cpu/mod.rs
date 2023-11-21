@@ -122,6 +122,7 @@ impl Cpu {
             Instruction::Inx => self.inx(),
             Instruction::Iny => self.iny(),
             Instruction::Jmp => self.jmp(),
+            Instruction::Jsr => self.jsr(),
             Instruction::Lda => self.lda(),
             Instruction::Ldx => self.ldx(),
             Instruction::Ldy => self.ldy(),
@@ -135,6 +136,7 @@ impl Cpu {
             Instruction::Rol => self.rol(),
             Instruction::Ror => self.ror(),
             Instruction::Rti => self.rti(),
+            Instruction::Rts => self.rts(),
             Instruction::Sbc => self.sbc(),
             Instruction::Sec => self.sec(),
             Instruction::Sed => self.sed(),
@@ -148,7 +150,6 @@ impl Cpu {
             Instruction::Txa => self.txa(),
             Instruction::Txs => self.txs(),
             Instruction::Tya => self.tya(),
-            _ => todo!(),
         };
 
         addr_mode_cycles + instruction_cycles
@@ -523,6 +524,18 @@ impl Cpu {
         1
     }
 
+    fn jsr(&mut self) -> u8 {
+        let high = high_byte(self.program_counter);
+        let low = low_byte(self.program_counter);
+
+        self.push(high);
+        self.push(low);
+
+        self.program_counter = self.absolute_address;
+
+        4
+    }
+
     fn lda(&mut self) -> u8 {
         self.load(Register::A)
     }
@@ -589,6 +602,15 @@ impl Cpu {
 
         // The break flag is unset when pulling.
         self.status = Status::from_bits_retain(status) & !Status::B;
+        self.program_counter = concat_bytes(pc_low, pc_high);
+
+        6
+    }
+
+    fn rts(&mut self) -> u8 {
+        let pc_low = self.pull();
+        let pc_high = self.pull();
+
         self.program_counter = concat_bytes(pc_low, pc_high);
 
         6
@@ -1226,6 +1248,51 @@ mod tests {
         assert!(!cpu.status.intersects(Status::N));
         assert!(!cpu.status.intersects(Status::B));
         assert!(cpu.status.bits() & 1 << 5 == 0);
+    }
+
+    #[test]
+    fn subroutines() {
+        let program = vec![
+            // Initialize stack.
+            0xA2, 0xFF, // LDX #$FF
+            0x9A, // TXS
+            // Calling subroutines.
+            0xA9, 0x40, // LDA #$40
+            0x20, 0x0D, 0x00, // JSR ADD
+            0x20, 0x0D, 0x00, // JSR ADD
+            0xA9, 0xFF, // LDA #$FF
+            // Subroutine.
+            0x69, 0x10, // ADD: ADC #$10
+            0x60, // RTS
+        ];
+        let mut cpu = setup(program);
+
+        // Initialize stack.
+        cpu.step(2);
+
+        // Load 0x40 into the accumulator.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0x40);
+
+        // Jump to subroutine.
+        assert_eq!(6, cpu.execute_next());
+        assert_eq!(cpu.program_counter, 0x0D);
+
+        // Run subroutine and return. The accumulator should have 0x10 added to it for a total of
+        // 0x50.
+        assert_eq!(6, cpu.step(2));
+        assert_eq!(cpu.accumulator, 0x50);
+        assert_eq!(cpu.program_counter, 0x08);
+
+        // Run the next subroutine. The accumulator should again have 0x10 added to it for a total
+        // of 0x60.
+        cpu.step(3);
+        assert_eq!(cpu.accumulator, 0x60);
+        assert_eq!(cpu.program_counter, 0x0B);
+
+        // Load 0xFF into the accumulator.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xFF);
     }
 
     #[test]
