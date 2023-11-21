@@ -104,6 +104,7 @@ impl Cpu {
             Instruction::Bmi => self.bmi(),
             Instruction::Bne => self.bne(),
             Instruction::Bpl => self.bpl(),
+            Instruction::Brk => self.brk(),
             Instruction::Bvc => self.bvc(),
             Instruction::Bvs => self.bvs(),
             Instruction::Clc => self.clc(),
@@ -133,6 +134,7 @@ impl Cpu {
             Instruction::Plp => self.plp(),
             Instruction::Rol => self.rol(),
             Instruction::Ror => self.ror(),
+            Instruction::Rti => self.rti(),
             Instruction::Sbc => self.sbc(),
             Instruction::Sec => self.sec(),
             Instruction::Sed => self.sed(),
@@ -430,6 +432,24 @@ impl Cpu {
         self.branch(BranchCondition::Plus)
     }
 
+    fn brk(&mut self) -> u8 {
+        let pc_high = high_byte(self.program_counter + 1);
+        let pc_low = low_byte(self.program_counter + 1);
+        // The break flag is set when pushing.
+        let status = (self.status | Status::B).bits();
+
+        // The program counter is pushed in high-low order so that it will be pulled in low-high
+        // order when returning.
+        self.push(pc_high);
+        self.push(pc_low);
+        self.push(status);
+
+        // Jump to the address stored at the IRQ vector (0xFFFE-0xFFFF).
+        self.program_counter = self.read_u16_absolute(0xFFFE);
+
+        7
+    }
+
     fn bvc(&mut self) -> u8 {
         self.branch(BranchCondition::OverflowClear)
     }
@@ -560,6 +580,18 @@ impl Cpu {
 
     fn ror(&mut self) -> u8 {
         self.shift(ShiftDirection::Right, true)
+    }
+
+    fn rti(&mut self) -> u8 {
+        let status = self.pull();
+        let pc_low = self.pull();
+        let pc_high = self.pull();
+
+        // The break flag is unset when pulling.
+        self.status = Status::from_bits_retain(status) & !Status::B;
+        self.program_counter = concat_bytes(pc_low, pc_high);
+
+        6
     }
 
     fn sbc(&mut self) -> u8 {
@@ -1087,6 +1119,50 @@ mod tests {
         // Indexed absolute addressing should always take 7 cycles with page crossing.
         assert_eq!(7, cpu.step(2));
         assert_eq!(cpu.read(0x10F), 0x01);
+    }
+
+    #[test]
+    fn interrupts() {
+        let program = vec![
+            // Initialize stack.
+            0xA2, 0xFF, // LDX #$FF
+            0x9A, // TXS
+            // Interrupts.
+            0x00, 0xAA, // BRK ; Break mark $AA.
+            0xA9, 0xF0, // LDA #$F0.
+            0xA9, 0xFA, // LDA #$FA.
+            0x40, // RTI
+        ];
+        let mut cpu = setup(program);
+
+        // Set IRQ vector to 0x0007.
+        cpu.write(0xFFFE, 0x07);
+
+        // Initialize stack pointer.
+        cpu.step(2);
+
+        // Request an interrupt. The program counter should jump to the IRQ vector (0x0007) and the
+        // return address should be set to the next instruction. In this case, the interrupt
+        // temporarily skips over the LDA #$F0 instruction.
+        assert_eq!(7, cpu.execute_next());
+        assert_eq!(cpu.program_counter, 0x0007);
+        assert_eq!(cpu.stack_pointer, 0xFC);
+        assert_eq!(cpu.read(0x01FF), 0x00);
+        assert_eq!(cpu.read(0x01FE), 0x05);
+
+        // Load 0xFA into the accumulator.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xFA);
+
+        // Return from interrupt. The program counter should jump back to the previously skipped
+        // instruction from earlier.
+        assert_eq!(6, cpu.execute_next());
+        assert_eq!(cpu.program_counter, 0x0005);
+        assert_eq!(cpu.stack_pointer, 0xFF);
+
+        // Load 0xF0 into the accumulator.
+        cpu.execute_next();
+        assert_eq!(cpu.accumulator, 0xF0);
     }
 
     #[test]
