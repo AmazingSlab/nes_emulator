@@ -110,6 +110,9 @@ impl Cpu {
             Instruction::Cld => self.cld(),
             Instruction::Cli => self.cli(),
             Instruction::Clv => self.clv(),
+            Instruction::Cmp => self.cmp(),
+            Instruction::Cpx => self.cpx(),
+            Instruction::Cpy => self.cpy(),
             Instruction::Dec => self.dec(),
             Instruction::Dex => self.dex(),
             Instruction::Dey => self.dey(),
@@ -243,6 +246,19 @@ impl Cpu {
         } else {
             1
         }
+    }
+
+    /// Powers the CMP, CPX, and CPY instructions.
+    fn compare(&mut self, register: Register) -> u8 {
+        let data = self.read(self.absolute_address);
+        let register = self.get_register(register);
+        let result = register.wrapping_sub(data);
+
+        self.status.set(Status::C, register >= data);
+        self.status.set(Status::Z, register == data);
+        self.status.set(Status::N, is_bit_set(result, 7));
+
+        2
     }
 
     /// Powers the DEC, DEX, DEY, INC, INX, and INY instructions.
@@ -440,6 +456,18 @@ impl Cpu {
     fn clv(&mut self) -> u8 {
         self.status.set(Status::V, false);
         2
+    }
+
+    fn cmp(&mut self) -> u8 {
+        self.compare(Register::A)
+    }
+
+    fn cpx(&mut self) -> u8 {
+        self.compare(Register::X)
+    }
+
+    fn cpy(&mut self) -> u8 {
+        self.compare(Register::Y)
     }
 
     fn dec(&mut self) -> u8 {
