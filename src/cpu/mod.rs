@@ -107,6 +107,9 @@ impl Cpu {
             Instruction::Bvc => self.bvc(),
             Instruction::Bvs => self.bvs(),
             Instruction::Clc => self.clc(),
+            Instruction::Cld => self.cld(),
+            Instruction::Cli => self.cli(),
+            Instruction::Clv => self.clv(),
             Instruction::Dec => self.dec(),
             Instruction::Dex => self.dex(),
             Instruction::Dey => self.dey(),
@@ -129,6 +132,8 @@ impl Cpu {
             Instruction::Ror => self.ror(),
             Instruction::Sbc => self.sbc(),
             Instruction::Sec => self.sec(),
+            Instruction::Sed => self.sed(),
+            Instruction::Sei => self.sei(),
             Instruction::Sta => self.sta(),
             Instruction::Stx => self.stx(),
             Instruction::Sty => self.sty(),
@@ -422,6 +427,21 @@ impl Cpu {
         2
     }
 
+    fn cld(&mut self) -> u8 {
+        self.status.set(Status::D, false);
+        2
+    }
+
+    fn cli(&mut self) -> u8 {
+        self.status.set(Status::I, false);
+        2
+    }
+
+    fn clv(&mut self) -> u8 {
+        self.status.set(Status::V, false);
+        2
+    }
+
     fn dec(&mut self) -> u8 {
         self.increment(None, -1)
     }
@@ -523,6 +543,16 @@ impl Cpu {
 
     fn sec(&mut self) -> u8 {
         self.status.set(Status::C, true);
+        2
+    }
+
+    fn sed(&mut self) -> u8 {
+        self.status.set(Status::D, true);
+        2
+    }
+
+    fn sei(&mut self) -> u8 {
+        self.status.set(Status::I, true);
         2
     }
 
