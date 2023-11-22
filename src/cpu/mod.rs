@@ -525,8 +525,8 @@ impl Cpu {
     }
 
     fn jsr(&mut self) -> u8 {
-        let high = high_byte(self.program_counter);
-        let low = low_byte(self.program_counter);
+        let high = high_byte(self.program_counter - 1);
+        let low = low_byte(self.program_counter - 1);
 
         self.push(high);
         self.push(low);
@@ -611,7 +611,7 @@ impl Cpu {
         let pc_low = self.pull();
         let pc_high = self.pull();
 
-        self.program_counter = concat_bytes(pc_low, pc_high);
+        self.program_counter = concat_bytes(pc_low, pc_high) + 1;
 
         6
     }
