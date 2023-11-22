@@ -177,12 +177,12 @@ impl Cpu {
     fn push(&mut self, value: u8) {
         let stack_address = 0x0100 + self.stack_pointer as u16;
         self.write(stack_address, value);
-        self.stack_pointer -= 1;
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
     /// Pulls a value off the stack.
     fn pull(&mut self) -> u8 {
-        self.stack_pointer += 1;
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
         let stack_address = 0x0100 + self.stack_pointer as u16;
         self.read(stack_address)
     }
@@ -812,7 +812,7 @@ impl Cpu {
     fn indirect_indexed(&mut self) -> u8 {
         let address = self.read(self.program_counter) as u16;
         let address = self.read_u16_absolute(address);
-        self.absolute_address = address + self.y_register as u16;
+        self.absolute_address = address.wrapping_add(self.y_register as u16);
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
         if high_byte(address) != high_byte(self.absolute_address) {
