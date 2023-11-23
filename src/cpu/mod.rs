@@ -801,10 +801,12 @@ impl Cpu {
 
     fn indexed_indirect(&mut self) -> u8 {
         let offset = self.read(self.program_counter);
-        let address = offset.wrapping_add(self.x_register) as u16;
+        let address = offset.wrapping_add(self.x_register);
 
-        let address = self.read_u16_absolute(address);
-        self.absolute_address = address;
+        // Fetching the address wraps around in the zero-page.
+        let low = self.read(address as u16);
+        let high = self.read(address.wrapping_add(1) as u16);
+        self.absolute_address = concat_bytes(low, high);
 
         4
     }
