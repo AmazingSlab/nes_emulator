@@ -155,6 +155,7 @@ impl Cpu {
             Instruction::Dcp => self.dcp(),
             Instruction::Isc => self.isc(),
             Instruction::Lax => self.lax(),
+            Instruction::Rla => self.rla(),
             Instruction::Sax => self.sax(),
             Instruction::Slo => self.slo(),
             Instruction::Usbc => self.sbc(),
@@ -709,6 +710,12 @@ impl Cpu {
     fn lax(&mut self) -> u8 {
         self.load(Register::A);
         self.load(Register::X)
+    }
+
+    fn rla(&mut self) -> u8 {
+        let cycles = self.rol();
+        self.and();
+        cycles
     }
 
     fn sax(&mut self) -> u8 {
