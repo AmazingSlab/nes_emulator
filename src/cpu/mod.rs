@@ -158,6 +158,7 @@ impl Cpu {
             Instruction::Rla => self.rla(),
             Instruction::Sax => self.sax(),
             Instruction::Slo => self.slo(),
+            Instruction::Sre => self.sre(),
             Instruction::Usbc => self.sbc(),
         };
 
@@ -727,6 +728,12 @@ impl Cpu {
     fn slo(&mut self) -> u8 {
         let cycles = self.asl();
         self.ora();
+        cycles
+    }
+
+    fn sre(&mut self) -> u8 {
+        let cycles = self.lsr();
+        self.eor();
         cycles
     }
 }

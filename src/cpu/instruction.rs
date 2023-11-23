@@ -64,5 +64,6 @@ pub enum Instruction {
     Rla,
     Sax,
     Slo,
+    Sre,
     Usbc,
 }
