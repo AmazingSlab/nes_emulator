@@ -152,6 +152,7 @@ impl Cpu {
             Instruction::Tya => self.tya(),
         };
 
+        self.address_will_not_cross_page = false;
         addr_mode_cycles + instruction_cycles
     }
 
@@ -286,7 +287,6 @@ impl Cpu {
             // absolute addresing. If the index did not cross a page, take an extra cycle to
             // compensate.
             cycles = 4 + self.address_will_not_cross_page as u8;
-            self.address_will_not_cross_page = false;
 
             result
         };
@@ -643,7 +643,10 @@ impl Cpu {
 
     fn sta(&mut self) -> u8 {
         self.write(self.absolute_address, self.accumulator);
-        2
+
+        // This instruction should always take the page crossing penalty when using indirect indexed
+        // addresing. If the index did not cross a page, take an extra cycle to compensate.
+        2 + self.address_will_not_cross_page as u8
     }
 
     fn stx(&mut self) -> u8 {
@@ -832,7 +835,8 @@ impl Cpu {
         self.absolute_address = address.wrapping_add(self.y_register as u16);
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
-        if high_byte(address) != high_byte(self.absolute_address) {
+        self.address_will_not_cross_page = high_byte(address) == high_byte(self.absolute_address);
+        if !self.address_will_not_cross_page {
             4
         } else {
             3
