@@ -22,7 +22,7 @@ pub struct Cpu {
     bus: Rc<RefCell<Bus>>,
     operate_on_accumulator: bool,
     branch_will_cross_page: bool,
-    address_will_cross_page: bool,
+    address_will_not_cross_page: bool,
 }
 
 impl Cpu {
@@ -283,8 +283,11 @@ impl Cpu {
             self.write(self.absolute_address, result);
 
             // This instruction should always take the page crossing penalty when using indexed
-            // absolute addresing.
-            cycles = 4 + !self.address_will_cross_page as u8;
+            // absolute addresing. If the index did not cross a page, take an extra cycle to
+            // compensate.
+            cycles = 4 + self.address_will_not_cross_page as u8;
+            self.address_will_not_cross_page = false;
+
             result
         };
 
@@ -702,8 +705,15 @@ impl Cpu {
         self.absolute_address = address + register as u16;
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
-        self.address_will_cross_page = high_byte(address) != high_byte(self.absolute_address);
-        if self.address_will_cross_page {
+        // This is inverted because INC and DEC always take an extra cycle in indexed absolute
+        // addressing, as opposed to other instructions which only take an extra cycle when the
+        // index result crosses a page. This flag is initially set to false and is only set to true
+        // if the result does *not* cross a page. The INC and DEC instructions then check this flag
+        // to see if they should take an extra cycle, at which point this flag is reset. This
+        // ensures that if these instructions use zero-page addresing before/after absolute
+        // addressing, the extra cycle cost is not falsely added.
+        self.address_will_not_cross_page = high_byte(address) == high_byte(self.absolute_address);
+        if !self.address_will_not_cross_page {
             3
         } else {
             2
