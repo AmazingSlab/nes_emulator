@@ -698,20 +698,20 @@ impl Cpu {
 /// Illegal instruction implementations.
 impl Cpu {
     fn dcp(&mut self) -> u8 {
-        let cycles = self.increment(None, -1);
-        self.compare(Register::A);
+        let cycles = self.dec();
+        self.cmp();
         cycles
     }
 
     fn isc(&mut self) -> u8 {
-        let cycles = self.increment(None, 1);
+        let cycles = self.inc();
         self.sbc();
         cycles
     }
 
     fn lax(&mut self) -> u8 {
-        self.load(Register::A);
-        self.load(Register::X)
+        self.lda();
+        self.ldx()
     }
 
     fn rla(&mut self) -> u8 {
