@@ -802,7 +802,7 @@ impl Cpu {
         // around and incorrectly fetches the high byte from 0x__00.
         // See the note at <https://www.nesdev.org/obelisk-6502-guide/reference.html#JMP>.
         let high = if low_byte(address) == 0xFF {
-            self.read(address & 0xFF)
+            self.read(address & !0xFF)
         } else {
             self.read(address + 1)
         };
