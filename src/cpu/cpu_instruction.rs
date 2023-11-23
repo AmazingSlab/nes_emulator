@@ -204,6 +204,7 @@ impl CpuInstruction {
             0xDA => Self::new(Instruction::Nop, AddressingMode::Implicit),
             0xDC => Self::new(Instruction::Nop, AddressingMode::AbsoluteX),
             0xE2 => Self::new(Instruction::Nop, AddressingMode::Immediate),
+            0xEB => Self::new(Instruction::Usbc, AddressingMode::Immediate),
             0xF4 => Self::new(Instruction::Nop, AddressingMode::ZeroPageX),
             0xFA => Self::new(Instruction::Nop, AddressingMode::Implicit),
             0xFC => Self::new(Instruction::Nop, AddressingMode::AbsoluteX),

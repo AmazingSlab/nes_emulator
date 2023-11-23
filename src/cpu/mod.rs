@@ -154,6 +154,7 @@ impl Cpu {
             // Illegal instructions.
             Instruction::Lax => self.lax(),
             Instruction::Sax => self.sax(),
+            Instruction::Usbc => self.sbc(),
         };
 
         self.address_will_not_cross_page = false;
