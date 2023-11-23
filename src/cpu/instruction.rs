@@ -58,8 +58,8 @@ pub enum Instruction {
     Rti,
 
     // Illegal instructions.
+    Dcp,
     Lax,
     Sax,
     Usbc,
-    Dcp,
 }
