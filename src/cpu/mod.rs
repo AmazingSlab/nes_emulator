@@ -152,6 +152,7 @@ impl Cpu {
             Instruction::Tya => self.tya(),
 
             // Illegal instructions.
+            Instruction::Dcp => self.dcp(),
             Instruction::Lax => self.lax(),
             Instruction::Sax => self.sax(),
             Instruction::Usbc => self.sbc(),
@@ -691,6 +692,12 @@ impl Cpu {
 
 /// Illegal instruction implementations.
 impl Cpu {
+    fn dcp(&mut self) -> u8 {
+        let cycles = self.increment(None, -1);
+        self.compare(Register::A);
+        cycles
+    }
+
     fn lax(&mut self) -> u8 {
         self.load(Register::A);
         self.load(Register::X)

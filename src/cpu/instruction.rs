@@ -61,4 +61,5 @@ pub enum Instruction {
     Lax,
     Sax,
     Usbc,
+    Dcp,
 }
