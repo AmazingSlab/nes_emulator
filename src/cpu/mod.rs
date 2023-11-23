@@ -250,7 +250,7 @@ impl Cpu {
         };
 
         if condition_met {
-            self.program_counter = self.absolute_address + 1;
+            self.program_counter = self.absolute_address;
             // If the target address crosses a memory page, the instruction takes one extra cycle.
             if self.branch_will_cross_page {
                 3
@@ -827,6 +827,7 @@ impl Cpu {
     fn relative(&mut self) -> u8 {
         let offset = self.read(self.program_counter) as i8 as i16;
         let address = self.program_counter.wrapping_add_signed(offset);
+        let address = address.wrapping_add(1);
         self.absolute_address = address;
 
         // If the target address crosses a memory page, the instruction can potentially take one
