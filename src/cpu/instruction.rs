@@ -62,6 +62,7 @@ pub enum Instruction {
     Isc,
     Lax,
     Rla,
+    Rra,
     Sax,
     Slo,
     Sre,

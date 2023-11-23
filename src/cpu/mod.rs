@@ -156,6 +156,7 @@ impl Cpu {
             Instruction::Isc => self.isc(),
             Instruction::Lax => self.lax(),
             Instruction::Rla => self.rla(),
+            Instruction::Rra => self.rra(),
             Instruction::Sax => self.sax(),
             Instruction::Slo => self.slo(),
             Instruction::Sre => self.sre(),
@@ -716,6 +717,12 @@ impl Cpu {
     fn rla(&mut self) -> u8 {
         let cycles = self.rol();
         self.and();
+        cycles
+    }
+
+    fn rra(&mut self) -> u8 {
+        let cycles = self.ror();
+        self.adc();
         cycles
     }
 
