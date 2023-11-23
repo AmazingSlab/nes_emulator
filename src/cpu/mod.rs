@@ -349,7 +349,7 @@ impl Cpu {
             self.operate_on_accumulator = false;
             2
         } else {
-            4
+            4 + self.address_will_not_cross_page as u8
         }
     }
 
