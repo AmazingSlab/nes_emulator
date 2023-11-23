@@ -170,11 +170,18 @@ impl CpuInstruction {
             0xFE => Self::new(Instruction::Inc, AddressingMode::AbsoluteX),
 
             // Illegal opcodes.
+            0x03 => Self::new(Instruction::Slo, AddressingMode::IndexedIndirect),
             0x04 => Self::new(Instruction::Nop, AddressingMode::ZeroPage),
+            0x07 => Self::new(Instruction::Slo, AddressingMode::ZeroPage),
             0x0C => Self::new(Instruction::Nop, AddressingMode::Absolute),
+            0x0F => Self::new(Instruction::Slo, AddressingMode::Absolute),
+            0x13 => Self::new(Instruction::Slo, AddressingMode::IndirectIndexed),
             0x14 => Self::new(Instruction::Nop, AddressingMode::ZeroPageX),
+            0x17 => Self::new(Instruction::Slo, AddressingMode::ZeroPageX),
             0x1A => Self::new(Instruction::Nop, AddressingMode::Implicit),
+            0x1B => Self::new(Instruction::Slo, AddressingMode::AbsoluteY),
             0x1C => Self::new(Instruction::Nop, AddressingMode::AbsoluteX),
+            0x1F => Self::new(Instruction::Slo, AddressingMode::AbsoluteX),
             0x34 => Self::new(Instruction::Nop, AddressingMode::ZeroPageX),
             0x3A => Self::new(Instruction::Nop, AddressingMode::Implicit),
             0x3C => Self::new(Instruction::Nop, AddressingMode::AbsoluteX),

@@ -156,6 +156,7 @@ impl Cpu {
             Instruction::Isc => self.isc(),
             Instruction::Lax => self.lax(),
             Instruction::Sax => self.sax(),
+            Instruction::Slo => self.slo(),
             Instruction::Usbc => self.sbc(),
         };
 
@@ -714,6 +715,12 @@ impl Cpu {
         let result = self.accumulator & self.x_register;
         self.write(self.absolute_address, result);
         2
+    }
+
+    fn slo(&mut self) -> u8 {
+        let cycles = self.asl();
+        self.ora();
+        cycles
     }
 }
 

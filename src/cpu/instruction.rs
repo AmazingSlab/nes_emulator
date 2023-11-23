@@ -62,5 +62,6 @@ pub enum Instruction {
     Isc,
     Lax,
     Sax,
+    Slo,
     Usbc,
 }
