@@ -23,12 +23,15 @@ pub struct Cpu {
     operate_on_accumulator: bool,
     branch_will_cross_page: bool,
     address_will_not_cross_page: bool,
+    instruction_number: usize,
+    cycle_number: usize,
 }
 
 impl Cpu {
     pub fn new(bus: Rc<RefCell<Bus>>) -> Self {
         Self {
             bus,
+            cycle_number: 7,
             ..Default::default()
         }
     }
@@ -63,7 +66,7 @@ impl Cpu {
     /// Executes the next N instructions.
     ///
     /// Returns the number of cycles the last instruction takes.
-    pub fn step(&mut self, steps: u8) -> u8 {
+    pub fn step(&mut self, steps: u16) -> u8 {
         let mut previous_cycle_count = 0;
         for _ in 0..steps {
             previous_cycle_count = self.execute_next();
@@ -75,6 +78,21 @@ impl Cpu {
     ///
     /// Returns the number of cycles the instruction takes.
     pub fn execute(&mut self, instruction: CpuInstruction) -> u8 {
+        self.instruction_number += 1;
+        let a = self.accumulator;
+        let x = self.x_register;
+        let y = self.y_register;
+        let p = self.status.bits() | 1 << 5;
+        let sp = self.stack_pointer;
+        let pc = self.program_counter;
+        let instruction_number = self.instruction_number;
+        let cycle_number = self.cycle_number;
+
+        println!(
+            "{instruction_number} {pc:04X} {:?}    A:{a:02X} X:{x:02X} Y:{y:02X} P:{p:02X} SP:{sp:02X} CYC:{cycle_number}",
+            instruction.instruction,
+        );
+
         self.program_counter += 1;
         let addr_mode_cycles = match instruction.addr_mode {
             AddressingMode::Implicit => self.implicit(),
@@ -164,7 +182,10 @@ impl Cpu {
         };
 
         self.address_will_not_cross_page = false;
-        addr_mode_cycles + instruction_cycles
+
+        let cycles = addr_mode_cycles + instruction_cycles;
+        self.cycle_number += cycles as usize;
+        cycles
     }
 
     /// Returns the value stored in a given register.
