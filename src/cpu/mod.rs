@@ -822,8 +822,13 @@ impl Cpu {
     }
 
     fn indirect_indexed(&mut self) -> u8 {
-        let address = self.read(self.program_counter) as u16;
-        let address = self.read_u16_absolute(address);
+        let address = self.read(self.program_counter);
+
+        // Fetching the address wraps around in the zero-page.
+        let low = self.read(address as u16);
+        let high = self.read(address.wrapping_add(1) as u16);
+        let address = concat_bytes(low, high);
+
         self.absolute_address = address.wrapping_add(self.y_register as u16);
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
