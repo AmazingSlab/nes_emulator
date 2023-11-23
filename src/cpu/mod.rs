@@ -705,7 +705,7 @@ impl Cpu {
     fn absolute_indexed(&mut self, register: Register) -> u8 {
         let address = self.read_u16();
         let register = self.get_register(register);
-        self.absolute_address = address + register as u16;
+        self.absolute_address = address.wrapping_add(register as u16);
 
         // If the index result crosses a memory page, the instruction takes one extra cycle.
         // This is inverted because INC and DEC always take an extra cycle in indexed absolute
