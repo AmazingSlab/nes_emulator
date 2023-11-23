@@ -1536,4 +1536,29 @@ mod tests {
 
         cpu
     }
+
+    #[test]
+    fn nestest() {
+        let rom = std::fs::read("./test_roms/nestest.nes").unwrap();
+
+        let ram = Vec::from([0; 0x8000]);
+        let memory = [
+            ram,
+            rom[0x10..0x10 + 16 * 1024].to_vec(),
+            rom[0x10..0x10 + 16 * 1024].to_vec(),
+        ]
+        .concat();
+
+        let memory = Memory::with_data(memory.try_into().unwrap());
+        let bus = Bus::with_memory(memory);
+        let bus = Rc::new(RefCell::new(bus));
+        let mut cpu = Cpu::new(bus);
+
+        cpu.program_counter = 0xC000;
+        cpu.stack_pointer = 0xFD;
+        cpu.step(8990);
+        assert_eq!(cpu.read_u16_absolute(0x02), 0x0000);
+        assert_eq!(cpu.program_counter, 0xC66E);
+        assert_eq!(cpu.cycle_number, 26554);
+    }
 }
