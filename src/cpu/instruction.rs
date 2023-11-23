@@ -59,4 +59,5 @@ pub enum Instruction {
 
     // Illegal instructions.
     Lax,
+    Sax,
 }

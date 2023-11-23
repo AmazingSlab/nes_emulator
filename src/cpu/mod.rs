@@ -153,6 +153,7 @@ impl Cpu {
 
             // Illegal instructions.
             Instruction::Lax => self.lax(),
+            Instruction::Sax => self.sax(),
         };
 
         self.address_will_not_cross_page = false;
@@ -692,6 +693,12 @@ impl Cpu {
     fn lax(&mut self) -> u8 {
         self.load(Register::A);
         self.load(Register::X)
+    }
+
+    fn sax(&mut self) -> u8 {
+        let result = self.accumulator & self.x_register;
+        self.write(self.absolute_address, result);
+        2
     }
 }
 
