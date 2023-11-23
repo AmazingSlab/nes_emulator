@@ -211,10 +211,17 @@ impl CpuInstruction {
             0xDC => Self::new(Instruction::Nop, AddressingMode::AbsoluteX),
             0xDF => Self::new(Instruction::Dcp, AddressingMode::AbsoluteX),
             0xE2 => Self::new(Instruction::Nop, AddressingMode::Immediate),
+            0xE3 => Self::new(Instruction::Isc, AddressingMode::IndexedIndirect),
+            0xE7 => Self::new(Instruction::Isc, AddressingMode::ZeroPage),
             0xEB => Self::new(Instruction::Usbc, AddressingMode::Immediate),
+            0xEF => Self::new(Instruction::Isc, AddressingMode::Absolute),
+            0xF3 => Self::new(Instruction::Isc, AddressingMode::IndirectIndexed),
             0xF4 => Self::new(Instruction::Nop, AddressingMode::ZeroPageX),
+            0xF7 => Self::new(Instruction::Isc, AddressingMode::ZeroPageX),
             0xFA => Self::new(Instruction::Nop, AddressingMode::Implicit),
+            0xFB => Self::new(Instruction::Isc, AddressingMode::AbsoluteY),
             0xFC => Self::new(Instruction::Nop, AddressingMode::AbsoluteX),
+            0xFF => Self::new(Instruction::Isc, AddressingMode::AbsoluteX),
             other => unimplemented!("unsupported illegal opcode: 0x{other:02X}"),
         }
     }

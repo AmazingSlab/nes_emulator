@@ -59,6 +59,7 @@ pub enum Instruction {
 
     // Illegal instructions.
     Dcp,
+    Isc,
     Lax,
     Sax,
     Usbc,

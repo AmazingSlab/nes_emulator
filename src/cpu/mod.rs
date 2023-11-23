@@ -153,6 +153,7 @@ impl Cpu {
 
             // Illegal instructions.
             Instruction::Dcp => self.dcp(),
+            Instruction::Isc => self.isc(),
             Instruction::Lax => self.lax(),
             Instruction::Sax => self.sax(),
             Instruction::Usbc => self.sbc(),
@@ -695,6 +696,12 @@ impl Cpu {
     fn dcp(&mut self) -> u8 {
         let cycles = self.increment(None, -1);
         self.compare(Register::A);
+        cycles
+    }
+
+    fn isc(&mut self) -> u8 {
+        let cycles = self.increment(None, 1);
+        self.sbc();
         cycles
     }
 
