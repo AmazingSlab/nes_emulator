@@ -56,4 +56,7 @@ pub enum Instruction {
     Brk,
     Nop,
     Rti,
+
+    // Illegal instructions.
+    Lax,
 }

@@ -150,6 +150,9 @@ impl Cpu {
             Instruction::Txa => self.txa(),
             Instruction::Txs => self.txs(),
             Instruction::Tya => self.tya(),
+
+            // Illegal instructions.
+            Instruction::Lax => self.lax(),
         };
 
         self.address_will_not_cross_page = false;
@@ -681,6 +684,14 @@ impl Cpu {
 
     fn tya(&mut self) -> u8 {
         self.transfer(Some(Register::Y), Some(Register::A))
+    }
+}
+
+/// Illegal instruction implementations.
+impl Cpu {
+    fn lax(&mut self) -> u8 {
+        self.load(Register::A);
+        self.load(Register::X)
     }
 }
 
