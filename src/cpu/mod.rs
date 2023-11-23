@@ -764,7 +764,7 @@ impl Cpu {
 
         // If the target address crosses a memory page, the instruction can potentially take one
         // extra cycle.
-        self.branch_will_cross_page = high_byte(address) != high_byte(self.program_counter);
+        self.branch_will_cross_page = high_byte(address) != high_byte(self.program_counter + 1);
         1
     }
 
