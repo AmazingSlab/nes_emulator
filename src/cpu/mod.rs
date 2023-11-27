@@ -32,12 +32,15 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new() -> Self {
-        Self {
-            stack_pointer: 0xFD,
-            status: Status::from_bits_retain(0x34),
-            cycle_number: 7,
-            ..Default::default()
-        }
+        Default::default()
+    }
+
+    pub fn reset(&mut self) {
+        self.stack_pointer = self.stack_pointer.wrapping_sub(3);
+        self.status.set(Status::I, true);
+        self.program_counter = self.read_u16_absolute(0xFFFC);
+        self.instruction_number = 0;
+        self.cycle_number = 7;
     }
 
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
@@ -94,7 +97,7 @@ impl Cpu {
         let a = self.accumulator;
         let x = self.x_register;
         let y = self.y_register;
-        let p = self.status.bits() | 1 << 5;
+        let p = (self.status | Status::B).bits() | 1 << 5;
         let sp = self.stack_pointer;
         let pc = self.program_counter;
         let instruction_number = self.instruction_number;
@@ -1558,6 +1561,7 @@ mod tests {
         let cartridge = Cartridge::new(&rom).unwrap();
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let bus = Bus::new(cpu.clone(), ram, cartridge);
+        cpu.borrow_mut().reset();
 
         (cpu, bus)
     }
@@ -1571,8 +1575,8 @@ mod tests {
         let _bus = Bus::new(cpu.clone(), [0; 2048], cartridge);
 
         let mut cpu = cpu.borrow_mut();
+        cpu.reset();
         cpu.program_counter = 0xC000;
-        cpu.stack_pointer = 0xFD;
         cpu.step(8990);
         assert_eq!(cpu.read_u16_absolute(0x02), 0x0000);
         assert_eq!(cpu.program_counter, 0xC66E);
