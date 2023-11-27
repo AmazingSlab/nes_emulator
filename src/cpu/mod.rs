@@ -1,7 +1,10 @@
 mod cpu_instruction;
 mod instruction;
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 pub use cpu_instruction::CpuInstruction;
 pub use instruction::Instruction;
@@ -19,7 +22,7 @@ pub struct Cpu {
     status: Status,
 
     absolute_address: u16,
-    bus: Rc<RefCell<Bus>>,
+    bus: Weak<RefCell<Bus>>,
     operate_on_accumulator: bool,
     branch_will_cross_page: bool,
     address_will_not_cross_page: bool,
@@ -28,20 +31,27 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new(bus: Rc<RefCell<Bus>>) -> Self {
+    pub fn new() -> Self {
         Self {
-            bus,
             cycle_number: 7,
             ..Default::default()
         }
     }
 
+    pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
+        self.bus = bus;
+    }
+
+    fn bus(&self) -> Rc<RefCell<Bus>> {
+        self.bus.upgrade().expect("bus not connected")
+    }
+
     pub fn read(&self, addr: u16) -> u8 {
-        self.bus.borrow().read(addr)
+        self.bus().borrow().read(addr)
     }
 
     pub fn write(&self, addr: u16, data: u8) {
-        self.bus.borrow_mut().write(addr, data);
+        self.bus().borrow_mut().write(addr, data);
     }
 
     /// Runs a single clock cycle.
@@ -66,7 +76,7 @@ impl Cpu {
     /// Executes the next N instructions.
     ///
     /// Returns the number of cycles the last instruction takes.
-    pub fn step(&mut self, steps: u16) -> u8 {
+    pub fn step(&mut self, steps: usize) -> u8 {
         let mut previous_cycle_count = 0;
         for _ in 0..steps {
             previous_cycle_count = self.execute_next();
@@ -1005,7 +1015,9 @@ bitflags::bitflags! {
 
 #[cfg(test)]
 mod tests {
-    use crate::Memory;
+    use std::rc::Rc;
+
+    use crate::Cartridge;
 
     use super::*;
 
@@ -1033,7 +1045,8 @@ mod tests {
             0xA9, 0x45, // LDA #$45
             0x69, 0x45, // ADC #$45
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Test basic addition.
         // 2 + 3 = 5.
@@ -1094,7 +1107,8 @@ mod tests {
             0x6A, // ROR A
             0x6A, // ROR A
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Test left shift.
         // Shifting left should double the operand.
@@ -1159,7 +1173,8 @@ mod tests {
             0xF0, 0x00, // BEQ *+0 ; Effectively a NOP.
             0xF0, 0x80, // BEQ *-128
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Test basic for loop.
         // Run the loop once.
@@ -1218,7 +1233,8 @@ mod tests {
             0xA2, 0x10, // LDX #$10
             0xFE, 0xFF, 0x00, // INC $00FF,X
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Test basic incrementing.
         assert_eq!(2, cpu.execute_next());
@@ -1259,10 +1275,10 @@ mod tests {
             0xA9, 0xFA, // LDA #$FA.
             0x40, // RTI
         ];
-        let mut cpu = setup(program);
-
         // Set IRQ vector to 0x0007.
-        cpu.write(0xFFFE, 0x07);
+        let vectors = [0x00, 0x00, 0x00, 0x00, 0x07, 0x00];
+        let (cpu, _bus) = setup(program, Some(vectors));
+        let mut cpu = cpu.borrow_mut();
 
         // Initialize stack pointer.
         cpu.step(2);
@@ -1307,7 +1323,8 @@ mod tests {
             0xA9, 0xFF, // LDA #$FF
             0x28, // PLP
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Stack pointer should be 0xFF while the status register is unchanged from the previous
         // load.
@@ -1369,7 +1386,8 @@ mod tests {
             0x69, 0x10, // ADD: ADC #$10
             0x60, // RTS
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Initialize stack.
         cpu.step(2);
@@ -1428,7 +1446,8 @@ mod tests {
             0xA0, 0xFF, // LDY #$FF
             0xB1, 0x15, // LDA ($15),Y
         ];
-        let mut cpu = setup(program);
+        let (cpu, _bus) = setup(program, None);
+        let mut cpu = cpu.borrow_mut();
 
         // Test immediate addressing.
         // Load 0x42 directly.
@@ -1521,39 +1540,35 @@ mod tests {
         assert_eq!(cpu.absolute_address, 0x108);
     }
 
-    fn setup(program: Vec<u8>) -> Cpu {
-        assert!(program.len() <= 64 * 1024);
+    fn setup(program: Vec<u8>, vectors: Option<[u8; 6]>) -> (Rc<RefCell<Cpu>>, Rc<RefCell<Bus>>) {
+        // Minimal iNES header for basic roms.
+        const HEADER: [u8; 16] = [0x4E, 0x45, 0x53, 0x1A, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-        let mut memory = vec![0; 64 * 1024];
-        memory.splice(0..program.len(), program);
-        let memory = Memory::with_data(memory.try_into().unwrap());
+        // Load the program directly into internal RAM.
+        let mut ram = [0; 2048];
+        ram[0..program.len()].copy_from_slice(&program);
 
-        let bus = Bus::with_memory(memory);
-        let bus = Rc::new(RefCell::new(bus));
-        let mut cpu = Cpu::new(bus);
+        // Construct a basic iNES ROM file to load.
+        let mut rom = [0; 16 * 1024 + HEADER.len()];
+        rom[0..HEADER.len()].copy_from_slice(&HEADER);
+        rom[0x3FFA + HEADER.len()..].copy_from_slice(&vectors.unwrap_or_default());
 
-        cpu.program_counter = 0x0000;
+        let cartridge = Cartridge::new(&rom).unwrap();
+        let cpu = Rc::new(RefCell::new(Cpu::new()));
+        let bus = Bus::new(cpu.clone(), ram, cartridge);
 
-        cpu
+        (cpu, bus)
     }
 
     #[test]
     fn nestest() {
         let rom = std::fs::read("./test_roms/nestest.nes").unwrap();
 
-        let ram = Vec::from([0; 0x8000]);
-        let memory = [
-            ram,
-            rom[0x10..0x10 + 16 * 1024].to_vec(),
-            rom[0x10..0x10 + 16 * 1024].to_vec(),
-        ]
-        .concat();
+        let cartridge = Cartridge::new(&rom).unwrap();
+        let cpu = Rc::new(RefCell::new(Cpu::new()));
+        let _bus = Bus::new(cpu.clone(), [0; 2048], cartridge);
 
-        let memory = Memory::with_data(memory.try_into().unwrap());
-        let bus = Bus::with_memory(memory);
-        let bus = Rc::new(RefCell::new(bus));
-        let mut cpu = Cpu::new(bus);
-
+        let mut cpu = cpu.borrow_mut();
         cpu.program_counter = 0xC000;
         cpu.stack_pointer = 0xFD;
         cpu.step(8990);
