@@ -29,7 +29,7 @@ impl Cartridge {
         let prg_rom = &bytes[16..prg_rom_bytes + 16];
 
         let mapper = match mapper_id {
-            0 => Mapper0::new(prg_rom),
+            0 => Mapper0::new(prg_rom, prg_rom_blocks)?,
             id => return Err(format!("mapper {id} not implemented")),
         };
 
@@ -71,12 +71,18 @@ enum NromVariant {
 }
 
 impl Mapper0 {
-    pub fn new(prg_rom: &[u8]) -> Self {
-        Self {
+    pub fn new(prg_rom: &[u8], prg_rom_blocks: u8) -> Result<Self, String> {
+        let variant = match prg_rom_blocks {
+            1 => NromVariant::Nrom128,
+            2 => NromVariant::Nrom256,
+            blocks => return Err(format!("{blocks} is not a valid block size for mapper 0")),
+        };
+
+        Ok(Self {
             prg_rom: prg_rom.into(),
             chr_rom: Vec::new(),
-            variant: NromVariant::Nrom128,
-        }
+            variant,
+        })
     }
 
     fn map_addr(&self, addr: u16) -> usize {
