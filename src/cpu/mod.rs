@@ -33,6 +33,8 @@ pub struct Cpu {
 impl Cpu {
     pub fn new() -> Self {
         Self {
+            stack_pointer: 0xFD,
+            status: Status::from_bits_retain(0x34),
             cycle_number: 7,
             ..Default::default()
         }
