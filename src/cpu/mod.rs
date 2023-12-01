@@ -28,6 +28,7 @@ pub struct Cpu {
     address_will_not_cross_page: bool,
     instruction_number: usize,
     cycle_number: usize,
+    cycle_wait: u8,
 }
 
 impl Cpu {
@@ -60,10 +61,12 @@ impl Cpu {
     }
 
     /// Runs a single clock cycle.
-    ///
-    /// Consider running at 21441960 Hz for a stable 60 FPS.
     pub fn clock(&mut self) {
-        todo!()
+        if self.cycle_wait == 0 {
+            self.cycle_wait = self.execute_next();
+        } else {
+            self.cycle_wait -= 1;
+        }
     }
 }
 
@@ -1022,7 +1025,7 @@ bitflags::bitflags! {
 mod tests {
     use std::rc::Rc;
 
-    use crate::Cartridge;
+    use crate::{Cartridge, Ppu};
 
     use super::*;
 
@@ -1560,7 +1563,8 @@ mod tests {
 
         let cartridge = Cartridge::new(&rom).unwrap();
         let cpu = Rc::new(RefCell::new(Cpu::new()));
-        let bus = Bus::new(cpu.clone(), ram, cartridge);
+        let ppu = Rc::new(RefCell::new(Ppu::new()));
+        let bus = Bus::new(cpu.clone(), ram, ppu, cartridge);
         cpu.borrow_mut().reset();
 
         (cpu, bus)
@@ -1572,7 +1576,8 @@ mod tests {
 
         let cartridge = Cartridge::new(&rom).unwrap();
         let cpu = Rc::new(RefCell::new(Cpu::new()));
-        let _bus = Bus::new(cpu.clone(), [0; 2048], cartridge);
+        let ppu = Rc::new(RefCell::new(Ppu::new()));
+        let _bus = Bus::new(cpu.clone(), [0; 2048], ppu, cartridge);
 
         let mut cpu = cpu.borrow_mut();
         cpu.reset();

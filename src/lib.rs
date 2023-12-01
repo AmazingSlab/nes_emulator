@@ -1,10 +1,12 @@
 mod bus;
 mod cartridge;
 pub mod cpu;
+pub mod ppu;
 
 pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use cpu::Cpu;
+pub use ppu::Ppu;
 
 #[inline]
 pub const fn is_bit_set(byte: u8, index: u8) -> bool {
