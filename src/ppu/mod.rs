@@ -5,7 +5,10 @@ use std::{
 
 use rand::Rng;
 
+mod color;
+
 use crate::Bus;
+use color::Color;
 
 #[derive(Debug)]
 pub struct Ppu {
@@ -30,11 +33,8 @@ impl Ppu {
     pub fn clock(&mut self) {
         let (x, y) = self.coords;
 
-        let color = if rand::thread_rng().gen() {
-            Color::new(255, 255, 255)
-        } else {
-            Color::new(0, 0, 0)
-        };
+        let color_index = rand::thread_rng().gen_range(0..64);
+        let color = Color::decode(color_index);
         self.draw_pixel(x, y, color);
         self.coords.0 += 1;
         if x > 341 {
@@ -64,18 +64,5 @@ impl Default for Ppu {
             buffer: [0; 256 * 240 * 3],
             coords: Default::default(),
         }
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl Color {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
     }
 }
