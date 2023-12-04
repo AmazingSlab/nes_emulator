@@ -36,6 +36,7 @@ impl Ppu {
             Color::new(0, 0, 0)
         };
         self.draw_pixel(x, y, color);
+        self.coords.0 += 1;
         if x > 341 {
             self.coords.0 = 0;
             self.coords.1 += 1;
@@ -43,7 +44,6 @@ impl Ppu {
         if y > 256 {
             self.coords.1 = 0;
         }
-        self.coords.0 += 1;
     }
 
     fn draw_pixel(&mut self, x: u16, y: u16, color: Color) {

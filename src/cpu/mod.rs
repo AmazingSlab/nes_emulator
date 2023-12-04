@@ -64,9 +64,8 @@ impl Cpu {
     pub fn clock(&mut self) {
         if self.cycle_wait == 0 {
             self.cycle_wait = self.execute_next();
-        } else {
-            self.cycle_wait -= 1;
         }
+        self.cycle_wait -= 1;
     }
 }
 
