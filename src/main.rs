@@ -5,6 +5,9 @@ use std::{cell::RefCell, rc::Rc};
 const SCALE: u32 = 4;
 
 pub fn main() {
+    let mut args = std::env::args();
+    let rom_path = args.nth(1).expect("no rom path provided");
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -21,7 +24,7 @@ pub fn main() {
         .create_texture_streaming(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
 
-    let rom = std::fs::read("./test_roms/nestest.nes").unwrap();
+    let rom = std::fs::read(rom_path).expect("failed to read rom");
     let cartridge = Cartridge::new(&rom).unwrap();
     let cpu = Rc::new(RefCell::new(Cpu::new()));
     let ppu = Rc::new(RefCell::new(Ppu::new()));
