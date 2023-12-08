@@ -29,6 +29,7 @@ pub struct Cpu {
     instruction_number: usize,
     cycle_number: usize,
     cycle_wait: u8,
+    pub is_instruction_finished: bool,
 }
 
 impl Cpu {
@@ -53,16 +54,17 @@ impl Cpu {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
-        self.bus().borrow().read(addr)
+        self.bus().borrow().cpu_read(addr)
     }
 
     pub fn write(&self, addr: u16, data: u8) {
-        self.bus().borrow_mut().write(addr, data);
+        self.bus().borrow_mut().cpu_write(addr, data);
     }
 
     /// Runs a single clock cycle.
     pub fn clock(&mut self) {
-        if self.cycle_wait == 0 {
+        self.is_instruction_finished = self.cycle_wait == 0;
+        if self.is_instruction_finished {
             self.cycle_wait = self.execute_next();
         }
         self.cycle_wait -= 1;

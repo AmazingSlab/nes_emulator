@@ -27,9 +27,11 @@ impl Cartridge {
 
         let prg_rom_bytes = prg_rom_blocks as usize * 16 * 1024;
         let prg_rom = &bytes[16..prg_rom_bytes + 16];
+        let chr_rom_bytes = chr_rom_blocks as usize * 8 * 1024;
+        let chr_rom = &bytes[prg_rom_bytes + 16..prg_rom_bytes + 16 + chr_rom_bytes];
 
         let mapper = match mapper_id {
-            0 => Mapper0::new(prg_rom, prg_rom_blocks)?,
+            0 => Mapper0::new(prg_rom, chr_rom, prg_rom_blocks)?,
             id => return Err(format!("mapper {id} not implemented")),
         };
 
@@ -43,18 +45,28 @@ impl Cartridge {
         self.bus = bus;
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
-        self.mapper.read(addr)
+    pub fn cpu_read(&self, addr: u16) -> u8 {
+        self.mapper.cpu_read(addr)
     }
 
-    pub fn write(&mut self, addr: u16, data: u8) {
-        self.mapper.write(addr, data)
+    pub fn cpu_write(&mut self, addr: u16, data: u8) {
+        self.mapper.cpu_write(addr, data)
+    }
+
+    pub fn ppu_read(&self, addr: u16) -> u8 {
+        self.mapper.ppu_read(addr)
+    }
+
+    pub fn ppu_write(&mut self, addr: u16, data: u8) {
+        self.mapper.ppu_write(addr, data)
     }
 }
 
 pub trait Mapper: std::fmt::Debug {
-    fn read(&self, addr: u16) -> u8;
-    fn write(&mut self, addr: u16, data: u8);
+    fn cpu_read(&self, addr: u16) -> u8;
+    fn cpu_write(&mut self, addr: u16, data: u8);
+    fn ppu_read(&self, addr: u16) -> u8;
+    fn ppu_write(&mut self, addr: u16, data: u8);
 }
 
 #[derive(Debug)]
@@ -71,7 +83,7 @@ enum NromVariant {
 }
 
 impl Mapper0 {
-    pub fn new(prg_rom: &[u8], prg_rom_blocks: u8) -> Result<Self, String> {
+    pub fn new(prg_rom: &[u8], chr_rom: &[u8], prg_rom_blocks: u8) -> Result<Self, String> {
         let variant = match prg_rom_blocks {
             1 => NromVariant::Nrom128,
             2 => NromVariant::Nrom256,
@@ -80,7 +92,7 @@ impl Mapper0 {
 
         Ok(Self {
             prg_rom: prg_rom.into(),
-            chr_rom: Vec::new(),
+            chr_rom: chr_rom.into(),
             variant,
         })
     }
@@ -95,12 +107,21 @@ impl Mapper0 {
 }
 
 impl Mapper for Mapper0 {
-    fn read(&self, addr: u16) -> u8 {
+    fn cpu_read(&self, addr: u16) -> u8 {
         let addr = self.map_addr(addr);
         self.prg_rom[addr]
     }
 
-    fn write(&mut self, addr: u16, data: u8) {
+    fn cpu_write(&mut self, addr: u16, data: u8) {
+        todo!()
+    }
+
+    fn ppu_read(&self, addr: u16) -> u8 {
+        let addr = addr as usize & 0x1FFF;
+        self.chr_rom[addr]
+    }
+
+    fn ppu_write(&mut self, addr: u16, data: u8) {
         todo!()
     }
 }

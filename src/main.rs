@@ -28,6 +28,15 @@ pub fn main() {
     let _bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), cartridge);
     cpu.borrow_mut().reset();
     let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let mut run_emulation = false;
+
+    // Controls:
+    // ESC: Quit.
+    // P: Toggle real-time emulation.
+    // Up/Down: Scroll through palettes.
+    // I: Step forward one CPU instruction.
+    // Space: Step forward one frame.
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -37,19 +46,56 @@ pub fn main() {
                     ..
                 } => break 'running,
                 Event::KeyDown {
-                    keycode: Some(Keycode::C),
+                    keycode: Some(Keycode::I),
                     ..
-                } => Bus::clock(cpu.clone(), ppu.clone()),
+                } => {
+                    while !cpu.borrow().is_instruction_finished {
+                        Bus::clock(cpu.clone(), ppu.clone());
+                    }
+                    cpu.borrow_mut().is_instruction_finished = false;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::P),
+                    ..
+                } => {
+                    run_emulation = !run_emulation;
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Up),
+                    ..
+                } => {
+                    let mut ppu = ppu.borrow_mut();
+                    if ppu.palette_number < 8 {
+                        ppu.palette_number += 1;
+                    }
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Down),
+                    ..
+                } => {
+                    let mut ppu = ppu.borrow_mut();
+                    if ppu.palette_number > 0 {
+                        ppu.palette_number -= 1;
+                    }
+                }
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
                 } => {
-                    for _ in 0..1000 {
+                    while !ppu.borrow().is_frame_ready {
                         Bus::clock(cpu.clone(), ppu.clone());
                     }
+                    ppu.borrow_mut().is_frame_ready = false;
                 }
                 _ => {}
             }
+        }
+
+        if run_emulation {
+            while !ppu.borrow().is_frame_ready {
+                Bus::clock(cpu.clone(), ppu.clone());
+            }
+            ppu.borrow_mut().is_frame_ready = false;
         }
 
         texture

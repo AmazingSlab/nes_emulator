@@ -32,19 +32,35 @@ impl Bus {
         })
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn cpu_read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF],
-            0x4020..=0xFFFF => self.cartridge.read(addr),
+            0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_read(addr & 0x07),
+            0x4020..=0xFFFF => self.cartridge.cpu_read(addr),
             _ => 0,
         }
     }
 
-    pub fn write(&mut self, addr: u16, data: u8) {
+    pub fn cpu_write(&mut self, addr: u16, data: u8) {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF] = data,
-            0x4020..=0xFFFF => self.cartridge.write(addr, data),
+            0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_write(addr & 0x07, data),
+            0x4020..=0xFFFF => self.cartridge.cpu_write(addr, data),
             _ => (),
+        }
+    }
+
+    pub fn ppu_read(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1FFF => self.cartridge.ppu_read(addr),
+            _ => 0,
+        }
+    }
+
+    pub fn ppu_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x0000..=0x1FFF => self.cartridge.ppu_write(addr, data),
+            _ => todo!(),
         }
     }
 
