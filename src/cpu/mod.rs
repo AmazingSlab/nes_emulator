@@ -96,19 +96,24 @@ impl Cpu {
     /// Returns the number of cycles the instruction takes.
     pub fn execute(&mut self, instruction: CpuInstruction) -> u8 {
         self.instruction_number += 1;
-        let a = self.accumulator;
-        let x = self.x_register;
-        let y = self.y_register;
-        let p = (self.status | Status::B).bits() | 1 << 5;
-        let sp = self.stack_pointer;
-        let pc = self.program_counter;
-        let instruction_number = self.instruction_number;
-        let cycle_number = self.cycle_number;
 
-        println!(
-            "{instruction_number} {pc:04X} {:?}    A:{a:02X} X:{x:02X} Y:{y:02X} P:{p:02X} SP:{sp:02X} CYC:{cycle_number}",
+        #[cfg(feature = "logging")]
+        {
+            let a = self.accumulator;
+            let x = self.x_register;
+            let y = self.y_register;
+            let p = (self.status | Status::B).bits() | 1 << 5;
+            let sp = self.stack_pointer;
+            let pc = self.program_counter;
+            let instruction_number = self.instruction_number;
+            let cycle_number = self.cycle_number;
+            let addr = self.absolute_address;
+
+            println!(
+            "{instruction_number} {pc:04X} {:?} {addr:04X}    A:{a:02X} X:{x:02X} Y:{y:02X} P:{p:02X} SP:{sp:02X} CYC:{cycle_number}",
             instruction.instruction,
         );
+        }
 
         self.program_counter += 1;
         let addr_mode_cycles = match instruction.addr_mode {
