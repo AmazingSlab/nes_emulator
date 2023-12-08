@@ -45,6 +45,20 @@ impl Cpu {
         self.cycle_number = 7;
     }
 
+    pub fn nmi(&mut self) {
+        let pc_high = high_byte(self.program_counter);
+        let pc_low = low_byte(self.program_counter);
+
+        self.push(pc_high);
+        self.push(pc_low);
+        self.push(self.status.bits());
+
+        // Jump to the address stored at the NMI vector (0xFFFA-0xFFFB).
+        self.program_counter = self.read_u16_absolute(0xFFFA);
+
+        self.cycle_wait = 8;
+    }
+
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
     }

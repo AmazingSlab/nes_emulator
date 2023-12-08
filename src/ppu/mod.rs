@@ -27,6 +27,7 @@ pub struct Ppu {
 
     pub is_frame_ready: bool,
     pub palette_number: u8,
+    pub emit_nmi: bool,
 }
 
 impl Ppu {
@@ -51,12 +52,19 @@ impl Ppu {
 
         // NOTE: Not accurate.
         self.cycle += 1;
+        if self.cycle == 1 && self.scanline == 241 {
+            self.status |= 0x80;
+            if self.control & 0x80 != 0 {
+                self.emit_nmi = true;
+            }
+        }
         if self.cycle >= 341 {
             self.cycle = 0;
             self.scanline += 1;
         }
         if self.scanline >= 261 {
             self.scanline = 0;
+            self.status &= 0x7F;
             self.is_frame_ready = true;
         }
     }
@@ -68,9 +76,6 @@ impl Ppu {
             0x01 => 0, // PPUMASK; not readable.
             // PPUSTATUS.
             0x02 => {
-                // TODO: Remove VBlank hack.
-                self.status |= 0x80;
-
                 // Only the top 3 bits are meaningful. The other 5 contain stale PPU bus data.
                 let data = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
 
@@ -149,8 +154,8 @@ impl Ppu {
 
     pub fn ppu_read(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x1FFF => todo!(), // Pattern tables.
-            0x2000..=0x3EFF => todo!(), // Nametables.
+            0x0000..=0x1FFF => 0, // Pattern tables.
+            0x2000..=0x3EFF => 0, // Nametables.
             // Palette RAM.
             0x3F00..=0x3FFF => {
                 let addr = addr & 0x1F;
@@ -230,6 +235,7 @@ impl Default for Ppu {
 
             is_frame_ready: false,
             palette_number: 0,
+            emit_nmi: false,
         }
     }
 }

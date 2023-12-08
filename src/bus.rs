@@ -69,5 +69,9 @@ impl Bus {
         for _ in 0..3 {
             ppu.borrow_mut().clock();
         }
+        if ppu.borrow().emit_nmi {
+            cpu.borrow_mut().nmi();
+            ppu.borrow_mut().emit_nmi = false;
+        }
     }
 }
