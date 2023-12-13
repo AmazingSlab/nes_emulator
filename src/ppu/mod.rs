@@ -153,7 +153,7 @@ impl Ppu {
         let color_index = self.sample_palette_ram(palette, index);
         let color = Color::decode(color_index);
 
-        self.draw_pixel(self.cycle - 1, self.scanline, color);
+        self.draw_pixel(self.cycle.saturating_sub(1), self.scanline, color);
         if self.cycle == 340 {
             self.cycle = 0;
             self.scanline += 1;
@@ -188,7 +188,7 @@ impl Ppu {
                 if y == 29 {
                     y = 0;
                     self.vram_addr
-                        .set_nametable_y(!self.vram_addr.nametable_y());
+                        .set_nametable_y(self.vram_addr.nametable_y() ^ 1);
                 } else if y == 31 {
                     y = 0;
                 } else {
@@ -232,7 +232,7 @@ impl Ppu {
             if self.vram_addr.coarse_x() == 31 {
                 self.vram_addr.set_coarse_x(0);
                 self.vram_addr
-                    .set_nametable_x(!self.vram_addr.nametable_x());
+                    .set_nametable_x(self.vram_addr.nametable_x() ^ 1);
             } else {
                 self.vram_addr.set_coarse_x(self.vram_addr.coarse_x() + 1);
             }
