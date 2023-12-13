@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{Cartridge, Cpu, Ppu};
+use crate::{cartridge::Mirroring, Cartridge, Cpu, Ppu};
 
 #[derive(Debug)]
 pub struct Bus {
@@ -62,6 +62,10 @@ impl Bus {
             0x0000..=0x1FFF => self.cartridge.ppu_write(addr, data),
             _ => todo!(),
         }
+    }
+
+    pub fn mirroring(&self) -> Mirroring {
+        self.cartridge.mirroring()
     }
 
     pub fn clock(cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {

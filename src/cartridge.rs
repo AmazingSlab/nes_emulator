@@ -24,6 +24,7 @@ impl Cartridge {
         let prg_rom_blocks = bytes[4];
         let chr_rom_blocks = bytes[5];
         let mapper_id = bytes[6] >> 4 | (bytes[7] & 0xF0);
+        let mirror_flag = bytes[6] & 0x01;
 
         let prg_rom_bytes = prg_rom_blocks as usize * 16 * 1024;
         let prg_rom = &bytes[16..prg_rom_bytes + 16];
@@ -31,7 +32,7 @@ impl Cartridge {
         let chr_rom = &bytes[prg_rom_bytes + 16..prg_rom_bytes + 16 + chr_rom_bytes];
 
         let mapper = match mapper_id {
-            0 => Mapper0::new(prg_rom, chr_rom, prg_rom_blocks)?,
+            0 => Mapper0::new(prg_rom, chr_rom, prg_rom_blocks, mirror_flag)?,
             id => return Err(format!("mapper {id} not implemented")),
         };
 
@@ -60,6 +61,10 @@ impl Cartridge {
     pub fn ppu_write(&mut self, addr: u16, data: u8) {
         self.mapper.ppu_write(addr, data)
     }
+
+    pub fn mirroring(&self) -> Mirroring {
+        self.mapper.mirroring()
+    }
 }
 
 pub trait Mapper: std::fmt::Debug {
@@ -67,6 +72,13 @@ pub trait Mapper: std::fmt::Debug {
     fn cpu_write(&mut self, addr: u16, data: u8);
     fn ppu_read(&self, addr: u16) -> u8;
     fn ppu_write(&mut self, addr: u16, data: u8);
+    fn mirroring(&self) -> Mirroring;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mirroring {
+    Horizontal,
+    Vertical,
 }
 
 #[derive(Debug)]
@@ -74,6 +86,7 @@ pub struct Mapper0 {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
     variant: NromVariant,
+    mirror_flag: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,7 +96,12 @@ enum NromVariant {
 }
 
 impl Mapper0 {
-    pub fn new(prg_rom: &[u8], chr_rom: &[u8], prg_rom_blocks: u8) -> Result<Self, String> {
+    pub fn new(
+        prg_rom: &[u8],
+        chr_rom: &[u8],
+        prg_rom_blocks: u8,
+        mirror_flag: u8,
+    ) -> Result<Self, String> {
         let variant = match prg_rom_blocks {
             1 => NromVariant::Nrom128,
             2 => NromVariant::Nrom256,
@@ -94,6 +112,7 @@ impl Mapper0 {
             prg_rom: prg_rom.into(),
             chr_rom: chr_rom.into(),
             variant,
+            mirror_flag,
         })
     }
 
@@ -123,5 +142,13 @@ impl Mapper for Mapper0 {
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
         todo!()
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        if self.mirror_flag == 0 {
+            Mirroring::Horizontal
+        } else {
+            Mirroring::Vertical
+        }
     }
 }

@@ -66,24 +66,6 @@ pub fn main() {
                     run_emulation = !run_emulation;
                 }
                 Event::KeyDown {
-                    keycode: Some(Keycode::Up),
-                    ..
-                } => {
-                    let mut ppu = ppu.borrow_mut();
-                    if ppu.palette_number < 8 {
-                        ppu.palette_number += 1;
-                    }
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Down),
-                    ..
-                } => {
-                    let mut ppu = ppu.borrow_mut();
-                    if ppu.palette_number > 0 {
-                        ppu.palette_number -= 1;
-                    }
-                }
-                Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
                 } => {
