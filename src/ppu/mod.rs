@@ -10,9 +10,9 @@ use color::Color;
 
 #[derive(Debug)]
 pub struct Ppu {
-    control: u8,
-    mask: u8,
-    status: u8,
+    control: PpuControl,
+    mask: PpuMask,
+    status: PpuStatus,
 
     bus: Weak<RefCell<Bus>>,
     pub buffer: [u8; 256 * 240 * 3],
@@ -21,8 +21,8 @@ pub struct Ppu {
     cycle: u16,
     scanline: u16,
     ppu_data_buffer: u8,
-    vram_addr: u16,
-    temp_vram_addr: u16,
+    vram_addr: VramAddress,
+    temp_vram_addr: VramAddress,
     fine_x_scroll: u8,
     addr_latch: u8,
 
@@ -64,36 +64,37 @@ impl Ppu {
                         self.load_shift_registers();
 
                         self.next_tile_nametable =
-                            self.ppu_read(0x2000 | (self.vram_addr & 0x0FFF));
+                            self.ppu_read(0x2000 | (self.vram_addr.0 & 0x0FFF));
                     }
                     2 => {
                         self.next_tile_attrib = self.ppu_read(
                             0x23C0
-                                | (self.vram_addr & 0x0C00)
-                                | (((self.vram_addr & 0x03E0) >> 7) << 3)
-                                | ((self.vram_addr & 0x1F) >> 2),
+                                | (self.vram_addr.nametable_y() << 11)
+                                | (self.vram_addr.nametable_x() << 10)
+                                | ((self.vram_addr.coarse_y() >> 2) << 3)
+                                | (self.vram_addr.coarse_x() >> 2),
                         );
 
-                        if self.vram_addr & 0x40 != 0 {
+                        if self.vram_addr.coarse_y() & 0x02 != 0 {
                             self.next_tile_attrib >>= 4;
                         }
-                        if self.vram_addr & 0x02 != 0 {
+                        if self.vram_addr.coarse_x() & 0x02 != 0 {
                             self.next_tile_attrib >>= 2;
                         }
                         self.next_tile_attrib &= 0x03;
                     }
                     4 => {
                         self.next_tile_pattern_low = self.ppu_read(
-                            ((self.control as u16 & 0x10) << 8)
+                            ((self.control.background_pattern() as u16) << 12)
                                 + ((self.next_tile_nametable as u16) << 4)
-                                + (self.vram_addr >> 12),
+                                + self.vram_addr.fine_y(),
                         );
                     }
                     6 => {
                         self.next_tile_pattern_high = self.ppu_read(
-                            ((self.control as u16 & 0x10) << 8)
+                            ((self.control.background_pattern() as u16) << 12)
                                 + ((self.next_tile_nametable as u16) << 4)
-                                + (self.vram_addr >> 12)
+                                + self.vram_addr.fine_y()
                                 + 8,
                         );
                     }
@@ -111,21 +112,21 @@ impl Ppu {
                 self.update_x_scroll();
             }
             if self.cycle == 338 || self.cycle == 340 {
-                self.next_tile_nametable = self.ppu_read(0x2000 | self.vram_addr & 0x0FFF);
+                self.next_tile_nametable = self.ppu_read(0x2000 | self.vram_addr.0 & 0x0FFF);
             }
         }
         if self.scanline == 240 {
             // Idle scanline; do nothing.
         }
         if self.cycle == 1 && self.scanline == 241 {
-            self.status |= 0x80;
-            if self.control & 0x80 != 0 {
+            self.status.set_vblank(true);
+            if self.control.nmi() {
                 self.emit_nmi = true;
             }
         }
         if self.scanline == 261 {
             if self.cycle == 1 {
-                self.status &= 0x7F;
+                self.status.set_vblank(false);
                 self.is_frame_ready = true;
                 self.is_odd_frame = !self.is_odd_frame;
             }
@@ -161,39 +162,45 @@ impl Ppu {
     }
 
     fn update_x_scroll(&mut self) {
-        if self.mask & 0x18 != 0 {
-            self.vram_addr = (self.vram_addr & !0x041F) | (self.temp_vram_addr & 0x041F);
+        if self.mask.show_background() || self.mask.show_sprites() {
+            self.vram_addr
+                .set_nametable_x(self.temp_vram_addr.nametable_x());
+            self.vram_addr.set_coarse_x(self.temp_vram_addr.coarse_x());
         }
     }
 
     fn update_y_scroll(&mut self) {
-        if self.mask & 0x18 != 0 {
-            self.vram_addr = (self.vram_addr & !0x7BE0) | (self.temp_vram_addr & 0x7BE0);
+        if self.mask.show_background() || self.mask.show_sprites() {
+            self.vram_addr
+                .set_nametable_y(self.temp_vram_addr.nametable_y());
+            self.vram_addr.set_coarse_y(self.temp_vram_addr.coarse_y());
+            self.vram_addr.set_fine_y(self.temp_vram_addr.fine_y());
         }
     }
 
     fn increment_y_scroll(&mut self) {
-        if self.mask & 0x18 != 0 {
-            if self.vram_addr & 0x7000 != 0x7000 {
-                self.vram_addr += 0x1000;
+        if self.mask.show_background() || self.mask.show_sprites() {
+            if self.vram_addr.fine_y() < 7 {
+                self.vram_addr.set_fine_y(self.vram_addr.fine_y() + 1);
             } else {
-                self.vram_addr &= !0x7000;
-                let mut y = (self.vram_addr & 0x03E0) >> 5;
+                self.vram_addr.set_fine_y(0);
+                let mut y = self.vram_addr.coarse_y();
                 if y == 29 {
                     y = 0;
-                    self.vram_addr ^= 0x0800;
+                    self.vram_addr
+                        .set_nametable_y(!self.vram_addr.nametable_y());
                 } else if y == 31 {
                     y = 0;
                 } else {
                     y += 1;
                 }
-                self.vram_addr = (self.vram_addr & !0x03E0) | (y << 5);
+                self.vram_addr.set_coarse_y(y);
             }
         }
     }
 
     fn update_shift_registers(&mut self) {
-        if self.mask & (1 << 3) != 0 {
+        if self.mask.show_background() {
             self.pattern_table_shift_low <<= 1;
             self.pattern_table_shift_high <<= 1;
             self.palette_attrib_shift_low <<= 1;
@@ -221,12 +228,13 @@ impl Ppu {
     }
 
     fn increment_x_scroll(&mut self) {
-        if self.mask & 0x18 != 0 {
-            if self.vram_addr & 0x001F == 31 {
-                self.vram_addr &= !0x001F;
-                self.vram_addr ^= 0x0400;
+        if self.mask.show_background() || self.mask.show_sprites() {
+            if self.vram_addr.coarse_x() == 31 {
+                self.vram_addr.set_coarse_x(0);
+                self.vram_addr
+                    .set_nametable_x(!self.vram_addr.nametable_x());
             } else {
-                self.vram_addr += 1;
+                self.vram_addr.set_coarse_x(self.vram_addr.coarse_x() + 1);
             }
         }
     }
@@ -239,12 +247,8 @@ impl Ppu {
             // PPUSTATUS.
             0x02 => {
                 // Only the top 3 bits are meaningful. The other 5 contain stale PPU bus data.
-                let data = (self.status & 0xE0) | (self.ppu_data_buffer & 0x1F);
-
-                // VBlank flag is reset after reading.
-                self.status &= 0x7F;
-
-                // Reading PPUSTATUS resets the address latch.
+                let data = (self.status.0 & 0xE0) | (self.ppu_data_buffer & 0x1F);
+                self.status.set_vblank(false);
                 self.addr_latch = 0;
 
                 data
@@ -258,20 +262,20 @@ impl Ppu {
                 // Data is delayed one read cycle. As such, the data returned is the data requested
                 // the previous read.
                 let data = self.ppu_data_buffer;
-                self.ppu_data_buffer = self.ppu_read(self.vram_addr);
+                self.ppu_data_buffer = self.ppu_read(self.vram_addr.0);
 
                 // The data delay applies to all memory locations except palette RAM.
-                let data = if self.vram_addr >= 0x3F00 {
+                let data = if self.vram_addr.0 >= 0x3F00 {
                     self.ppu_data_buffer
                 } else {
                     data
                 };
 
                 // Advance address horizontally/vertically depending on the control register.
-                if self.control & (1 << 2) == 0 {
-                    self.vram_addr += 1;
+                if self.control.address_increment() == 0 {
+                    self.vram_addr.0 += 1;
                 } else {
-                    self.vram_addr += 32;
+                    self.vram_addr.0 += 32;
                 }
                 data
             }
@@ -284,25 +288,23 @@ impl Ppu {
         match addr {
             // PPUCTRL.
             0x00 => {
-                self.control = data;
-                // Set the nametable select bits of the VRAM address to the base nametable address
-                // bits of the PPUCTRL register.
-                self.temp_vram_addr = (self.temp_vram_addr & 0x73FF) | ((data as u16 & 0x03) << 10);
+                self.control.0 = data;
+                self.temp_vram_addr.set_nametable_x(data as u16 & 0b01);
+                self.temp_vram_addr.set_nametable_y(data as u16 & 0b10);
             }
-            0x01 => self.mask = data, // PPUMASK.
-            0x02 => (),               // PPUSTATUS; not writable.
-            0x03 => (),               // OAMADDR.
-            0x04 => (),               // OAMDATA.
+            0x01 => self.mask.0 = data, // PPUMASK.
+            0x02 => (),                 // PPUSTATUS; not writable.
+            0x03 => (),                 // OAMADDR.
+            0x04 => (),                 // OAMDATA.
             // PPUSCROLL.
             0x05 => {
                 if self.addr_latch == 0 {
-                    self.temp_vram_addr = (self.temp_vram_addr & 0x001F) | (data >> 3) as u16;
+                    self.temp_vram_addr.set_coarse_x(data as u16 >> 3);
                     self.fine_x_scroll = data & 0x07;
                     self.addr_latch = 1;
                 } else {
-                    self.temp_vram_addr = (self.temp_vram_addr & 0x73E0)
-                        | ((data as u16) << 12)
-                        | ((data as u16 & 0xF8) << 2);
+                    self.temp_vram_addr.set_coarse_y(data as u16 >> 3);
+                    self.temp_vram_addr.set_fine_y(data as u16 & 0x07);
                     self.addr_latch = 0;
                 }
             }
@@ -310,24 +312,24 @@ impl Ppu {
             0x06 => {
                 // The CPU requires 2 writes to set the PPU's address.
                 if self.addr_latch == 0 {
-                    self.temp_vram_addr =
-                        (self.temp_vram_addr & 0x00FF) | ((data as u16 & 0x3F) << 8);
+                    self.temp_vram_addr.0 =
+                        (self.temp_vram_addr.0 & !0xFF00) | ((data as u16 & 0x3F) << 8);
                     self.addr_latch = 1;
                 } else {
-                    self.temp_vram_addr = (self.temp_vram_addr & 0xFF00) | data as u16;
+                    self.temp_vram_addr.0 = (self.temp_vram_addr.0 & !0x00FF) | data as u16;
                     self.vram_addr = self.temp_vram_addr;
                     self.addr_latch = 0;
                 }
             }
             // PPUDATA.
             0x07 => {
-                self.ppu_write(self.vram_addr, data);
+                self.ppu_write(self.vram_addr.0, data);
 
                 // Advance address horizontally/vertically depending on the control register.
-                if self.control & (1 << 2) == 0 {
-                    self.vram_addr += 1;
+                if self.control.address_increment() == 0 {
+                    self.vram_addr.0 += 1;
                 } else {
-                    self.vram_addr += 32;
+                    self.vram_addr.0 += 32;
                 }
             }
             _ => (),
@@ -417,9 +419,9 @@ impl Ppu {
 impl Default for Ppu {
     fn default() -> Self {
         Self {
-            control: 0,
-            mask: 0,
-            status: 0,
+            control: PpuControl::default(),
+            mask: PpuMask::default(),
+            status: PpuStatus::default(),
 
             bus: Weak::new(),
             buffer: [0; 256 * 240 * 3],
@@ -428,8 +430,8 @@ impl Default for Ppu {
             cycle: 0,
             scanline: 0,
             ppu_data_buffer: 0,
-            vram_addr: 0,
-            temp_vram_addr: 0,
+            vram_addr: VramAddress::default(),
+            temp_vram_addr: VramAddress::default(),
             fine_x_scroll: 0,
             addr_latch: 0,
 
@@ -448,4 +450,62 @@ impl Default for Ppu {
             is_odd_frame: false,
         }
     }
+}
+
+#[bitfield_struct::bitfield(u16)]
+#[derive(PartialEq, Eq)]
+struct VramAddress {
+    #[bits(5)]
+    coarse_x: u16,
+    #[bits(5)]
+    coarse_y: u16,
+    #[bits(1)]
+    nametable_x: u16,
+    #[bits(1)]
+    nametable_y: u16,
+    #[bits(3)]
+    fine_y: u16,
+    #[bits(1)]
+    __: u16,
+}
+
+#[bitfield_struct::bitfield(u8)]
+#[derive(PartialEq, Eq)]
+struct PpuControl {
+    #[bits(2)]
+    nametable: u8,
+    #[bits(1)]
+    address_increment: u8,
+    #[bits(1)]
+    sprite_pattern: u8,
+    #[bits(1)]
+    background_pattern: u8,
+    #[bits(1)]
+    sprite_size: u8,
+    #[bits(1)]
+    ppu_master_slave: u8,
+    nmi: bool,
+}
+
+#[bitfield_struct::bitfield(u8)]
+#[derive(PartialEq, Eq)]
+struct PpuMask {
+    grayscale: bool,
+    show_left_background_tiles: bool,
+    show_left_sprite_tiles: bool,
+    show_background: bool,
+    show_sprites: bool,
+    emphasize_red: bool,
+    emphasize_green: bool,
+    emphasize_blue: bool,
+}
+
+#[bitfield_struct::bitfield(u8)]
+#[derive(PartialEq, Eq)]
+struct PpuStatus {
+    #[bits(5)]
+    open_bus: u8,
+    sprite_overflow: bool,
+    sprite_zero_hit: bool,
+    vblank: bool,
 }
