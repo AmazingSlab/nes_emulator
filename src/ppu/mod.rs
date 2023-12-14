@@ -290,7 +290,8 @@ impl Ppu {
             0x00 => {
                 self.control.0 = data;
                 self.temp_vram_addr.set_nametable_x(data as u16 & 0b01);
-                self.temp_vram_addr.set_nametable_y(data as u16 & 0b10);
+                self.temp_vram_addr
+                    .set_nametable_y((data as u16 & 0b10) >> 1);
             }
             0x01 => self.mask.0 = data, // PPUMASK.
             0x02 => (),                 // PPUSTATUS; not writable.
@@ -343,7 +344,14 @@ impl Ppu {
                 // TODO: Get from cartridge.
                 let mirroring = Mirroring::Vertical;
                 match mirroring {
-                    Mirroring::Horizontal => todo!(),
+                    Mirroring::Horizontal => {
+                        let addr = addr & 0x0FFF;
+                        if addr < 0x0800 {
+                            self.nametables[addr as usize & 0x03FF]
+                        } else {
+                            self.nametables[(addr as usize & 0x03FF) + 0x0400]
+                        }
+                    }
                     Mirroring::Vertical => self.nametables[addr as usize & 0x07FF],
                 }
             }
@@ -376,7 +384,14 @@ impl Ppu {
                 // TODO: Get from cartridge.
                 let mirroring = Mirroring::Vertical;
                 match mirroring {
-                    Mirroring::Horizontal => todo!(),
+                    Mirroring::Horizontal => {
+                        let addr = addr & 0x0FFF;
+                        if addr < 0x0800 {
+                            self.nametables[addr as usize & 0x03FF] = data;
+                        } else {
+                            self.nametables[(addr as usize & 0x03FF) + 0x0400] = data;
+                        }
+                    }
                     Mirroring::Vertical => self.nametables[addr as usize & 0x07FF] = data,
                 }
             }
