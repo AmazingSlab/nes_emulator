@@ -1,13 +1,13 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{cartridge::Mirroring, Cartridge, Cpu, Ppu};
+use crate::{Cartridge, Cpu, Ppu};
 
 #[derive(Debug)]
 pub struct Bus {
     cpu: Rc<RefCell<Cpu>>,
     ram: [u8; 2048],
     ppu: Rc<RefCell<Ppu>>,
-    cartridge: Cartridge,
+    cartridge: Rc<RefCell<Cartridge>>,
 }
 
 impl Bus {
@@ -15,9 +15,9 @@ impl Bus {
         cpu: Rc<RefCell<Cpu>>,
         ram: [u8; 2048],
         ppu: Rc<RefCell<Ppu>>,
-        cartridge: Cartridge,
+        cartridge: Rc<RefCell<Cartridge>>,
     ) -> Rc<RefCell<Self>> {
-        let mut bus = Self {
+        let bus = Self {
             cpu,
             ram,
             ppu,
@@ -27,7 +27,7 @@ impl Bus {
         Rc::new_cyclic(|rc| {
             bus.cpu.borrow_mut().connect_bus(rc.clone());
             bus.ppu.borrow_mut().connect_bus(rc.clone());
-            bus.cartridge.connect_bus(rc.clone());
+            bus.cartridge.borrow_mut().connect_bus(rc.clone());
             RefCell::new(bus)
         })
     }
@@ -36,7 +36,7 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF],
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_read(addr & 0x07),
-            0x4020..=0xFFFF => self.cartridge.cpu_read(addr),
+            0x4020..=0xFFFF => self.cartridge.borrow().cpu_read(addr),
             _ => 0,
         }
     }
@@ -45,27 +45,23 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF] = data,
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_write(addr & 0x07, data),
-            0x4020..=0xFFFF => self.cartridge.cpu_write(addr, data),
+            0x4020..=0xFFFF => self.cartridge.borrow_mut().cpu_write(addr, data),
             _ => (),
         }
     }
 
     pub fn ppu_read(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x1FFF => self.cartridge.ppu_read(addr),
+            0x0000..=0x1FFF => self.cartridge.borrow().ppu_read(addr),
             _ => 0,
         }
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x0000..=0x1FFF => self.cartridge.ppu_write(addr, data),
+            0x0000..=0x1FFF => self.cartridge.borrow_mut().ppu_write(addr, data),
             _ => todo!(),
         }
-    }
-
-    pub fn mirroring(&self) -> Mirroring {
-        self.cartridge.mirroring()
     }
 
     pub fn clock(cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {

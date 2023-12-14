@@ -5,7 +5,7 @@ use std::{
 
 mod color;
 
-use crate::{cartridge::Mirroring, Bus};
+use crate::{cartridge::Mirroring, Bus, Cartridge};
 use color::Color;
 
 #[derive(Debug)]
@@ -15,6 +15,7 @@ pub struct Ppu {
     status: PpuStatus,
 
     bus: Weak<RefCell<Bus>>,
+    cartridge: Rc<RefCell<Cartridge>>,
     pub buffer: [u8; 256 * 240 * 3],
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
@@ -42,8 +43,39 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
+        Self {
+            control: PpuControl::default(),
+            mask: PpuMask::default(),
+            status: PpuStatus::default(),
+
+            bus: Weak::new(),
+            cartridge,
+            buffer: [0; 256 * 240 * 3],
+            nametables: [0; 2048],
+            palette_ram: [0; 32],
+            cycle: 0,
+            scanline: 0,
+            ppu_data_buffer: 0,
+            vram_addr: VramAddress::default(),
+            temp_vram_addr: VramAddress::default(),
+            fine_x_scroll: 0,
+            addr_latch: 0,
+
+            pattern_table_shift_low: 0,
+            pattern_table_shift_high: 0,
+            palette_attrib_shift_low: 0,
+            palette_attrib_shift_high: 0,
+
+            next_tile_nametable: 0,
+            next_tile_attrib: 0,
+            next_tile_pattern_low: 0,
+            next_tile_pattern_high: 0,
+
+            is_frame_ready: false,
+            emit_nmi: false,
+            is_odd_frame: false,
+        }
     }
 
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
@@ -341,8 +373,7 @@ impl Ppu {
         match addr {
             0x0000..=0x1FFF => self.bus().borrow().ppu_read(addr),
             0x2000..=0x3EFF => {
-                // TODO: Get from cartridge.
-                let mirroring = Mirroring::Vertical;
+                let mirroring = self.cartridge.borrow().mirroring();
                 match mirroring {
                     Mirroring::Horizontal => {
                         let addr = addr & 0x0FFF;
@@ -378,11 +409,9 @@ impl Ppu {
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) {
         match addr {
-            // 0x0000..=0x1FFF => self.bus().borrow_mut().ppu_write(addr, data),
-            0x0000..=0x1FFF => (),
+            0x0000..=0x1FFF => self.bus().borrow_mut().ppu_write(addr, data),
             0x2000..=0x3EFF => {
-                // TODO: Get from cartridge.
-                let mirroring = Mirroring::Vertical;
+                let mirroring = self.cartridge.borrow().mirroring();
                 match mirroring {
                     Mirroring::Horizontal => {
                         let addr = addr & 0x0FFF;
@@ -428,42 +457,6 @@ impl Ppu {
 
     fn sample_palette_ram(&self, palette: u8, index: u8) -> u8 {
         self.ppu_read(0x3F00 + ((palette << 2) + index) as u16)
-    }
-}
-
-impl Default for Ppu {
-    fn default() -> Self {
-        Self {
-            control: PpuControl::default(),
-            mask: PpuMask::default(),
-            status: PpuStatus::default(),
-
-            bus: Weak::new(),
-            buffer: [0; 256 * 240 * 3],
-            nametables: [0; 2048],
-            palette_ram: [0; 32],
-            cycle: 0,
-            scanline: 0,
-            ppu_data_buffer: 0,
-            vram_addr: VramAddress::default(),
-            temp_vram_addr: VramAddress::default(),
-            fine_x_scroll: 0,
-            addr_latch: 0,
-
-            pattern_table_shift_low: 0,
-            pattern_table_shift_high: 0,
-            palette_attrib_shift_low: 0,
-            palette_attrib_shift_high: 0,
-
-            next_tile_nametable: 0,
-            next_tile_attrib: 0,
-            next_tile_pattern_low: 0,
-            next_tile_pattern_high: 0,
-
-            is_frame_ready: false,
-            emit_nmi: false,
-            is_odd_frame: false,
-        }
     }
 }
 

@@ -1581,9 +1581,9 @@ mod tests {
         rom[0..HEADER.len()].copy_from_slice(&HEADER);
         rom[0x3FFA + HEADER.len()..].copy_from_slice(&vectors.unwrap_or_default());
 
-        let cartridge = Cartridge::new(&rom).unwrap();
+        let cartridge = Rc::new(RefCell::new(Cartridge::new(&rom).unwrap()));
         let cpu = Rc::new(RefCell::new(Cpu::new()));
-        let ppu = Rc::new(RefCell::new(Ppu::new()));
+        let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
         let bus = Bus::new(cpu.clone(), ram, ppu, cartridge);
         cpu.borrow_mut().reset();
 
@@ -1594,9 +1594,9 @@ mod tests {
     fn nestest() {
         let rom = std::fs::read("./test_roms/nestest.nes").unwrap();
 
-        let cartridge = Cartridge::new(&rom).unwrap();
+        let cartridge = Rc::new(RefCell::new(Cartridge::new(&rom).unwrap()));
         let cpu = Rc::new(RefCell::new(Cpu::new()));
-        let ppu = Rc::new(RefCell::new(Ppu::new()));
+        let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
         let _bus = Bus::new(cpu.clone(), [0; 2048], ppu, cartridge);
 
         let mut cpu = cpu.borrow_mut();

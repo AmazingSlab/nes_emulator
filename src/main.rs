@@ -27,9 +27,9 @@ pub fn main() {
         .unwrap();
 
     let rom = std::fs::read(rom_path).expect("failed to read rom");
-    let cartridge = Cartridge::new(&rom).unwrap();
+    let cartridge = Rc::new(RefCell::new(Cartridge::new(&rom).unwrap()));
     let cpu = Rc::new(RefCell::new(Cpu::new()));
-    let ppu = Rc::new(RefCell::new(Ppu::new()));
+    let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
     let _bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), cartridge);
     cpu.borrow_mut().reset();
     let mut event_pump = sdl_context.event_pump().unwrap();
