@@ -1577,7 +1577,7 @@ mod tests {
         ram[0..program.len()].copy_from_slice(&program);
 
         // Construct a basic iNES ROM file to load.
-        let mut rom = [0; 16 * 1024 + HEADER.len()];
+        let mut rom = vec![0; 16 * 1024 + HEADER.len()];
         rom[0..HEADER.len()].copy_from_slice(&HEADER);
         rom[0x3FFA + HEADER.len()..].copy_from_slice(&vectors.unwrap_or_default());
 

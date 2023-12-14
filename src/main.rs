@@ -100,7 +100,7 @@ pub fn main() {
 
         texture
             .with_lock(None, |buffer, _| {
-                buffer.copy_from_slice(&ppu.borrow().buffer);
+                buffer.copy_from_slice(&*ppu.borrow().buffer);
             })
             .unwrap();
         canvas.copy(&texture, None, None).unwrap();

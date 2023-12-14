@@ -16,7 +16,7 @@ pub struct Ppu {
 
     bus: Weak<RefCell<Bus>>,
     cartridge: Rc<RefCell<Cartridge>>,
-    pub buffer: [u8; 256 * 240 * 3],
+    pub buffer: Box<[u8; 256 * 240 * 3]>,
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
     cycle: u16,
@@ -51,7 +51,7 @@ impl Ppu {
 
             bus: Weak::new(),
             cartridge,
-            buffer: [0; 256 * 240 * 3],
+            buffer: Box::new([0; 256 * 240 * 3]),
             nametables: [0; 2048],
             palette_ram: [0; 32],
             cycle: 0,
