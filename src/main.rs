@@ -85,20 +85,18 @@ pub fn main() {
         let controller_state = get_controller_state(&event_pump);
         bus.borrow_mut().set_controller_state(controller_state);
 
+        let desired_delta = 1000 / FPS;
+        let frame_start = timer_subsystem.ticks64();
         if run_emulation {
-            let desired_delta = 1000 / FPS;
-            let frame_start = timer_subsystem.ticks64();
-
             while !ppu.borrow().is_frame_ready {
                 Bus::clock(cpu.clone(), ppu.clone());
             }
             ppu.borrow_mut().is_frame_ready = false;
-
-            let frame_end = timer_subsystem.ticks64();
-            let delta = frame_end - frame_start;
-            if delta < desired_delta {
-                std::thread::sleep(Duration::from_millis(desired_delta - delta));
-            }
+        }
+        let frame_end = timer_subsystem.ticks64();
+        let delta = frame_end - frame_start;
+        if delta < desired_delta {
+            std::thread::sleep(Duration::from_millis(desired_delta - delta));
         }
 
         texture
