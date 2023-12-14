@@ -68,7 +68,7 @@ impl Cpu {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
-        self.bus().borrow().cpu_read(addr)
+        self.bus().borrow_mut().cpu_read(addr)
     }
 
     pub fn write(&self, addr: u16, data: u8) {

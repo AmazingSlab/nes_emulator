@@ -27,3 +27,16 @@ pub const fn low_byte(word: u16) -> u8 {
 pub const fn high_byte(word: u16) -> u8 {
     (word >> 8) as u8
 }
+
+#[bitfield_struct::bitfield(u8)]
+#[derive(PartialEq, Eq)]
+pub struct Controller {
+    pub a: bool,
+    pub b: bool,
+    pub select: bool,
+    pub start: bool,
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+}
