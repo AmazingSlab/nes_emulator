@@ -82,10 +82,6 @@ impl Ppu {
         self.bus = bus;
     }
 
-    fn bus(&self) -> Rc<RefCell<Bus>> {
-        self.bus.upgrade().expect("bus not connected")
-    }
-
     pub fn clock(&mut self) {
         if self.scanline <= 239 || self.scanline == 261 {
             if (self.cycle >= 2 && self.cycle <= 257) || (self.cycle >= 321 && self.cycle <= 337) {
@@ -371,7 +367,7 @@ impl Ppu {
 
     pub fn ppu_read(&self, addr: u16) -> u8 {
         match addr {
-            0x0000..=0x1FFF => self.bus().borrow().ppu_read(addr),
+            0x0000..=0x1FFF => self.cartridge.borrow().ppu_read(addr),
             0x2000..=0x3EFF => {
                 let mirroring = self.cartridge.borrow().mirroring();
                 match mirroring {
@@ -409,7 +405,7 @@ impl Ppu {
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x0000..=0x1FFF => self.bus().borrow_mut().ppu_write(addr, data),
+            0x0000..=0x1FFF => self.cartridge.borrow_mut().ppu_write(addr, data),
             0x2000..=0x3EFF => {
                 let mirroring = self.cartridge.borrow().mirroring();
                 match mirroring {
