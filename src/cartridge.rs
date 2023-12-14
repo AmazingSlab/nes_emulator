@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 use std::{cell::RefCell, rc::Weak};
 
 use crate::{is_bit_set, Bus};
@@ -131,9 +129,7 @@ impl Mapper for Mapper0 {
         self.prg_rom[addr]
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
-        todo!()
-    }
+    fn cpu_write(&mut self, _addr: u16, _data: u8) {}
 
     fn ppu_read(&self, addr: u16) -> u8 {
         if !self.chr_rom.is_empty() {
@@ -144,9 +140,7 @@ impl Mapper for Mapper0 {
         }
     }
 
-    fn ppu_write(&mut self, addr: u16, data: u8) {
-        todo!()
-    }
+    fn ppu_write(&mut self, _addr: u16, _data: u8) {}
 
     fn mirroring(&self) -> Mirroring {
         if self.mirror_flag == 0 {
