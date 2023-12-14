@@ -43,7 +43,6 @@ pub fn main() {
     // Controls:
     // ESC: Quit.
     // P: Toggle real-time emulation.
-    // Up/Down: Scroll through palettes.
     // I: Step forward one CPU instruction.
     // Space: Step forward one frame.
     'running: loop {
