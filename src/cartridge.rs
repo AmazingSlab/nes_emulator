@@ -136,8 +136,12 @@ impl Mapper for Mapper0 {
     }
 
     fn ppu_read(&self, addr: u16) -> u8 {
-        let addr = addr as usize & 0x1FFF;
-        self.chr_rom[addr]
+        if !self.chr_rom.is_empty() {
+            let addr = addr as usize & 0x1FFF;
+            self.chr_rom[addr]
+        } else {
+            0
+        }
     }
 
     fn ppu_write(&mut self, addr: u16, data: u8) {
