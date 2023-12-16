@@ -481,20 +481,19 @@ impl Ppu {
                                 | (tile_y << 5)
                                 | tile_x,
                         );
-                        let attrib = self.ppu_read(
+                        let mut attrib = self.ppu_read(
                             0x23C0
                                 | (nametable_y << 11)
                                 | (nametable_x << 10)
                                 | ((tile_y >> 2) << 3)
                                 | (tile_x >> 2),
                         );
-                        let attrib = if tile_y & 0x02 != 0 {
-                            attrib >> 4
-                        } else if tile_x & 0x02 != 0 {
-                            attrib >> 2
-                        } else {
-                            attrib
-                        };
+                        if tile_y & 0x02 != 0 {
+                            attrib >>= 4
+                        }
+                        if tile_x & 0x02 != 0 {
+                            attrib >>= 2
+                        }
                         let attrib = attrib & 0x03;
                         let background_pattern = (self.control.background_pattern() as u16) << 12;
                         let mut pattern_low = [0u8; 8];
