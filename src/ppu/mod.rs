@@ -470,7 +470,7 @@ impl Ppu {
                             attrib
                         };
                         let attrib = attrib & 0x03;
-                        let background_pattern = 0b1 << 12;
+                        let background_pattern = (self.control.background_pattern() as u16) << 12;
                         let mut pattern_low = [0u8; 8];
                         for i in 0..8 {
                             let value =
