@@ -17,6 +17,7 @@ pub struct Ppu {
     bus: Weak<RefCell<Bus>>,
     cartridge: Rc<RefCell<Cartridge>>,
     pub buffer: Box<[u8; 256 * 240 * 3]>,
+    pub nametable_buffer: Box<[u8; 512 * 480 * 3]>,
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
     cycle: u16,
@@ -52,6 +53,7 @@ impl Ppu {
             bus: Weak::new(),
             cartridge,
             buffer: Box::new([0; 256 * 240 * 3]),
+            nametable_buffer: Box::new([0; 512 * 480 * 3]),
             nametables: [0; 2048],
             palette_ram: [0; 32],
             cycle: 0,
@@ -438,6 +440,74 @@ impl Ppu {
                 self.palette_ram[addr as usize] = data;
             }
             _ => (),
+        }
+    }
+
+    pub fn draw_nametables(&mut self) {
+        for nametable_y in 0..=1 {
+            for nametable_x in 0..=1 {
+                for tile_y in 0..30 {
+                    for tile_x in 0..32 {
+                        let nametable = self.ppu_read(
+                            0x2000
+                                | (nametable_y << 11)
+                                | (nametable_x << 10)
+                                | (tile_y << 5)
+                                | tile_x,
+                        );
+                        let attrib = self.ppu_read(
+                            0x23C0
+                                | (nametable_y << 11)
+                                | (nametable_x << 10)
+                                | ((tile_y >> 2) << 3)
+                                | (tile_x >> 2),
+                        );
+                        let attrib = if tile_y & 0x02 != 0 {
+                            attrib >> 4
+                        } else if tile_x & 0x02 != 0 {
+                            attrib >> 2
+                        } else {
+                            attrib
+                        };
+                        let attrib = attrib & 0x03;
+                        let background_pattern = 0b1 << 12;
+                        let mut pattern_low = [0u8; 8];
+                        for i in 0..8 {
+                            let value =
+                                self.ppu_read(background_pattern + ((nametable as u16) << 4) + i);
+                            pattern_low[i as usize] = value;
+                        }
+                        let mut pattern_high = [0u8; 8];
+                        for i in 0..8 {
+                            let value = self
+                                .ppu_read(background_pattern + ((nametable as u16) << 4) + i + 8);
+                            pattern_high[i as usize] = value;
+                        }
+
+                        for (y, (low, high)) in pattern_low
+                            .into_iter()
+                            .zip(pattern_high.into_iter())
+                            .enumerate()
+                        {
+                            for x in 0..8 {
+                                let low = (low & (0x80 >> x) > 0) as u8;
+                                let high = (high & (0x80 >> x) > 0) as u8;
+                                let index = (high << 1) | low;
+                                let color_index = self.sample_palette_ram(attrib, index);
+                                let color = Color::decode(color_index);
+
+                                let index = x
+                                    + tile_x as usize * 8
+                                    + nametable_x as usize * 256
+                                    + (y + tile_y as usize * 8 + nametable_y as usize * 240) * 512;
+                                self.nametable_buffer[index * 3] = color.r;
+                                self.nametable_buffer[index * 3 + 1] = color.g;
+                                self.nametable_buffer[index * 3 + 2] = color.b;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

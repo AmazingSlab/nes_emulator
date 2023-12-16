@@ -22,12 +22,24 @@ pub fn main() {
         .position_centered()
         .build()
         .unwrap();
+    let nametable_window = video_subsystem
+        .window("Nametable Viewer", 512 * 2, 480 * 2)
+        .position(200, 200)
+        .build()
+        .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
     canvas.set_scale(SCALE as f32, SCALE as f32).unwrap();
     let texture_creator = canvas.texture_creator();
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 256, 240)
+        .unwrap();
+
+    let mut nametable_canvas = nametable_window.into_canvas().build().unwrap();
+    nametable_canvas.set_scale(2.0, 2.0).unwrap();
+    let nametable_texture_creator = nametable_canvas.texture_creator();
+    let mut nametable_texture = nametable_texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, 512, 480)
         .unwrap();
 
     let rom = std::fs::read(rom_path).expect("failed to read rom");
@@ -76,6 +88,7 @@ pub fn main() {
                         Bus::clock(cpu.clone(), ppu.clone());
                     }
                     ppu.borrow_mut().is_frame_ready = false;
+                    ppu.borrow_mut().draw_nametables();
                 }
                 _ => {}
             }
@@ -91,6 +104,7 @@ pub fn main() {
                 Bus::clock(cpu.clone(), ppu.clone());
             }
             ppu.borrow_mut().is_frame_ready = false;
+            ppu.borrow_mut().draw_nametables();
         }
         let frame_end = timer_subsystem.ticks64();
         let delta = frame_end - frame_start;
@@ -104,7 +118,18 @@ pub fn main() {
             })
             .unwrap();
         canvas.copy(&texture, None, None).unwrap();
+
+        nametable_texture
+            .with_lock(None, |buffer, _| {
+                buffer.copy_from_slice(&*ppu.borrow().nametable_buffer);
+            })
+            .unwrap();
+        nametable_canvas
+            .copy(&nametable_texture, None, None)
+            .unwrap();
+
         canvas.present();
+        nametable_canvas.present();
     }
 }
 
