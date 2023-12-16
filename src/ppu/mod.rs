@@ -80,6 +80,32 @@ impl Ppu {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.control = PpuControl::default();
+        self.mask = PpuMask::default();
+        self.status = PpuStatus::default();
+
+        self.cycle = 0;
+        self.scanline = 0;
+        self.ppu_data_buffer = 0;
+        self.fine_x_scroll = 0;
+        self.addr_latch = 0;
+
+        self.pattern_table_shift_low = 0;
+        self.pattern_table_shift_high = 0;
+        self.palette_attrib_shift_low = 0;
+        self.palette_attrib_shift_high = 0;
+
+        self.next_tile_nametable = 0;
+        self.next_tile_attrib = 0;
+        self.next_tile_pattern_low = 0;
+        self.next_tile_pattern_high = 0;
+
+        self.is_frame_ready = false;
+        self.emit_nmi = false;
+        self.is_odd_frame = false;
+    }
+
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
     }

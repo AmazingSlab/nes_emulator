@@ -96,4 +96,9 @@ impl Bus {
             ppu.borrow_mut().emit_nmi = false;
         }
     }
+
+    pub fn reset(cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {
+        cpu.borrow_mut().reset();
+        ppu.borrow_mut().reset();
+    }
 }

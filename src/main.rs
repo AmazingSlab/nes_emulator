@@ -90,6 +90,12 @@ pub fn main() {
                     ppu.borrow_mut().is_frame_ready = false;
                     ppu.borrow_mut().draw_nametables();
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::R),
+                    ..
+                } => {
+                    Bus::reset(cpu.clone(), ppu.clone());
+                }
                 _ => {}
             }
         }
