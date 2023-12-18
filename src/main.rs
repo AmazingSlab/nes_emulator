@@ -6,7 +6,9 @@ use sdl2::{
 };
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-const SCALE: u32 = 4;
+const MAIN_SCALE: u32 = 4;
+const NAMETABLE_SCALE: u32 = 2;
+const PATTERN_SCALE: u32 = 3;
 const FPS: u64 = 60;
 
 pub fn main() {
@@ -18,28 +20,54 @@ pub fn main() {
     let timer_subsystem = sdl_context.timer().unwrap();
 
     let window = video_subsystem
-        .window("NES Emulator", 256 * SCALE, 240 * SCALE)
+        .window("NES Emulator", 256 * MAIN_SCALE, 240 * MAIN_SCALE)
         .position_centered()
         .build()
         .unwrap();
     let nametable_window = video_subsystem
-        .window("Nametable Viewer", 512 * 2, 480 * 2)
+        .window(
+            "Nametable Viewer",
+            512 * NAMETABLE_SCALE,
+            480 * NAMETABLE_SCALE,
+        )
         .position(200, 200)
+        .build()
+        .unwrap();
+    let pattern_window = video_subsystem
+        .window(
+            "Pattern Table Viewer",
+            256 * PATTERN_SCALE,
+            128 * PATTERN_SCALE,
+        )
+        .position(400, 400)
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_scale(SCALE as f32, SCALE as f32).unwrap();
+    canvas
+        .set_scale(MAIN_SCALE as f32, MAIN_SCALE as f32)
+        .unwrap();
     let texture_creator = canvas.texture_creator();
     let mut texture = texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
 
     let mut nametable_canvas = nametable_window.into_canvas().build().unwrap();
-    nametable_canvas.set_scale(2.0, 2.0).unwrap();
+    nametable_canvas
+        .set_scale(NAMETABLE_SCALE as f32, NAMETABLE_SCALE as f32)
+        .unwrap();
     let nametable_texture_creator = nametable_canvas.texture_creator();
     let mut nametable_texture = nametable_texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 512, 480)
+        .unwrap();
+
+    let mut pattern_canvas = pattern_window.into_canvas().build().unwrap();
+    pattern_canvas
+        .set_scale(PATTERN_SCALE as f32, PATTERN_SCALE as f32)
+        .unwrap();
+    let pattern_texture_creator = pattern_canvas.texture_creator();
+    let mut pattern_texture = pattern_texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, 256, 128)
         .unwrap();
 
     let rom = std::fs::read(rom_path).expect("failed to read rom");
@@ -57,6 +85,8 @@ pub fn main() {
     // P: Toggle real-time emulation.
     // I: Step forward one CPU instruction.
     // Space: Step forward one frame.
+    // R: Reset.
+    // Q/E: Cycle between pattern table palettes.
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -89,12 +119,33 @@ pub fn main() {
                     }
                     ppu.borrow_mut().is_frame_ready = false;
                     ppu.borrow_mut().draw_nametables();
+                    ppu.borrow_mut().draw_pattern_tables();
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
                     ..
                 } => {
                     Bus::reset(cpu.clone(), ppu.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::E),
+                    ..
+                } => {
+                    if ppu.borrow().palette < 7 {
+                        ppu.borrow_mut().palette += 1;
+                    } else {
+                        ppu.borrow_mut().palette = 0;
+                    }
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Q),
+                    ..
+                } => {
+                    if ppu.borrow().palette > 0 {
+                        ppu.borrow_mut().palette -= 1;
+                    } else {
+                        ppu.borrow_mut().palette = 7;
+                    }
                 }
                 _ => {}
             }
@@ -111,6 +162,7 @@ pub fn main() {
             }
             ppu.borrow_mut().is_frame_ready = false;
             ppu.borrow_mut().draw_nametables();
+            ppu.borrow_mut().draw_pattern_tables();
         }
         let frame_end = timer_subsystem.ticks64();
         let delta = frame_end - frame_start;
@@ -134,8 +186,16 @@ pub fn main() {
             .copy(&nametable_texture, None, None)
             .unwrap();
 
+        pattern_texture
+            .with_lock(None, |buffer, _| {
+                buffer.copy_from_slice(&*ppu.borrow().pattern_table_buffer);
+            })
+            .unwrap();
+        pattern_canvas.copy(&pattern_texture, None, None).unwrap();
+
         canvas.present();
         nametable_canvas.present();
+        pattern_canvas.present();
     }
 }
 
