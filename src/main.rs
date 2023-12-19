@@ -201,25 +201,15 @@ pub fn main() {
 
 fn get_controller_state(event_pump: &sdl2::EventPump) -> Controller {
     let keyboard_state = event_pump.keyboard_state();
+    let key = |key: Scancode| keyboard_state.is_scancode_pressed(key);
 
-    let mut controller = Controller::new();
-    let is_a_pressed = keyboard_state.is_scancode_pressed(Scancode::Z);
-    let is_b_pressed = keyboard_state.is_scancode_pressed(Scancode::X);
-    let is_select_pressed = keyboard_state.is_scancode_pressed(Scancode::RShift);
-    let is_start_pressed = keyboard_state.is_scancode_pressed(Scancode::Return);
-    let is_up_pressed = keyboard_state.is_scancode_pressed(Scancode::Up);
-    let is_down_pressed = keyboard_state.is_scancode_pressed(Scancode::Down);
-    let is_left_pressed = keyboard_state.is_scancode_pressed(Scancode::Left);
-    let is_right_pressed = keyboard_state.is_scancode_pressed(Scancode::Right);
-
-    controller.set_a(is_a_pressed);
-    controller.set_b(is_b_pressed);
-    controller.set_select(is_select_pressed);
-    controller.set_start(is_start_pressed);
-    controller.set_up(is_up_pressed);
-    controller.set_down(is_down_pressed);
-    controller.set_left(is_left_pressed);
-    controller.set_right(is_right_pressed);
-
-    controller
+    Controller::new()
+        .with_a(key(Scancode::Z))
+        .with_b(key(Scancode::X))
+        .with_select(key(Scancode::RShift))
+        .with_start(key(Scancode::Return))
+        .with_up(key(Scancode::Up))
+        .with_down(key(Scancode::Down))
+        .with_left(key(Scancode::Left))
+        .with_right(key(Scancode::Right))
 }
