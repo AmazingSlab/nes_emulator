@@ -21,6 +21,9 @@ pub struct Ppu {
     pub pattern_table_buffer: Box<[u8; 256 * 128 * 3]>,
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
+    oam: [u8; 256],
+    pub oam_addr: u8,
+    pub oam_dma_page: u8,
     cycle: u16,
     scanline: u16,
     ppu_data_buffer: u8,
@@ -80,6 +83,9 @@ impl Ppu {
             pattern_table_buffer,
             nametables: [0; 2048],
             palette_ram: [0; 32],
+            oam: [0; 256],
+            oam_addr: 0,
+            oam_dma_page: 0,
             cycle: 0,
             scanline: 0,
             ppu_data_buffer: 0,
@@ -334,10 +340,10 @@ impl Ppu {
 
                 data
             }
-            0x03 => 0, // OAMADDR; not readable.
-            0x04 => 0, // OAMDATA.
-            0x05 => 0, // PPUSCROLL; not readable.
-            0x06 => 0, // PPUADDR; not readable.
+            0x03 => 0,                                // OAMADDR; not readable.
+            0x04 => self.oam[self.oam_addr as usize], // OAMDATA.
+            0x05 => 0,                                // PPUSCROLL; not readable.
+            0x06 => 0,                                // PPUADDR; not readable.
             // PPUDATA.
             0x07 => {
                 // Data is delayed one read cycle. As such, the data returned is the data requested
@@ -360,6 +366,7 @@ impl Ppu {
                 }
                 data
             }
+            0x4014 => 0, // OAMDMA; not readable.
             _ => 0,
         }
     }
@@ -374,10 +381,14 @@ impl Ppu {
                 self.temp_vram_addr
                     .set_nametable_y((data as u16 & 0b10) >> 1);
             }
-            0x01 => self.mask.0 = data, // PPUMASK.
-            0x02 => (),                 // PPUSTATUS; not writable.
-            0x03 => (),                 // OAMADDR.
-            0x04 => (),                 // OAMDATA.
+            0x01 => self.mask.0 = data,   // PPUMASK.
+            0x02 => (),                   // PPUSTATUS; not writable.
+            0x03 => self.oam_addr = data, // OAMADDR.
+            // OAMDATA.
+            0x04 => {
+                self.oam[self.oam_addr as usize] = data;
+                self.oam_addr = self.oam_addr.wrapping_add(1);
+            }
             // PPUSCROLL.
             0x05 => {
                 if self.addr_latch == 0 {
@@ -414,6 +425,7 @@ impl Ppu {
                     self.vram_addr.0 += 32;
                 }
             }
+            0x4014 => self.oam_dma_page = data, // OAMDMA.
             _ => (),
         }
     }

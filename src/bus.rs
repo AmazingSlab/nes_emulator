@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{Cartridge, Controller, Cpu, Ppu};
+use crate::{concat_bytes, Cartridge, Controller, Cpu, Ppu};
 
 #[derive(Debug)]
 pub struct Bus {
@@ -11,6 +11,11 @@ pub struct Bus {
     controller: Controller,
     controller_state: Controller,
     controller_strobe: bool,
+
+    cycle: usize,
+    is_dma_active: bool,
+    dma_dummy: bool,
+    dma_data: u8,
 }
 
 impl Bus {
@@ -28,6 +33,11 @@ impl Bus {
             controller: Controller::default(),
             controller_state: Controller::default(),
             controller_strobe: false,
+
+            cycle: 0,
+            is_dma_active: false,
+            dma_dummy: true,
+            dma_data: 0,
         };
 
         Rc::new_cyclic(|rc| {
@@ -46,6 +56,7 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF],
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_read(addr & 0x07),
+            0x4014 => self.ppu.borrow_mut().cpu_read(addr),
             0x4016 => {
                 if self.controller_strobe {
                     self.controller_state = self.controller;
@@ -63,6 +74,11 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF] = data,
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_write(addr & 0x07, data),
+            0x4014 => {
+                self.ppu.borrow_mut().cpu_write(addr, data);
+                self.is_dma_active = true;
+                self.dma_dummy = true;
+            }
             0x4016 => {
                 self.controller_strobe = (data & 0x01) != 0;
                 self.controller_state = self.controller;
@@ -86,15 +102,40 @@ impl Bus {
         }
     }
 
-    pub fn clock(cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {
-        cpu.borrow_mut().clock();
+    /// Clocks the system relative to the CPU clock, meaning the PPU is clocked 3 times per call.
+    ///
+    /// This is an associated function instead of a method due to how the CPU and PPU need mutable
+    /// access to the bus, which means borrowing the bus RefCell to call this function would always
+    /// be invalid.
+    pub fn clock(bus: Rc<RefCell<Bus>>, cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {
+        if !bus.borrow().is_dma_active {
+            cpu.borrow_mut().clock();
+        } else if bus.borrow().dma_dummy {
+            if bus.borrow().cycle % 2 == 1 {
+                bus.borrow_mut().dma_dummy = false;
+            }
+        } else {
+            let page = ppu.borrow().oam_dma_page;
+            let addr = ppu.borrow().oam_addr;
+            if bus.borrow().cycle % 2 == 0 {
+                let addr = concat_bytes(addr, page);
+                bus.borrow_mut().dma_data = cpu.borrow().read(addr);
+            } else {
+                // Write to the OAMDATA register.
+                ppu.borrow_mut().cpu_write(0x04, bus.borrow().dma_data);
+                if ppu.borrow().oam_addr == 0 {
+                    bus.borrow_mut().is_dma_active = false;
+                }
+            }
+        }
         for _ in 0..3 {
             ppu.borrow_mut().clock();
         }
-        if ppu.borrow().emit_nmi {
+        if !bus.borrow().is_dma_active && ppu.borrow().emit_nmi {
             cpu.borrow_mut().nmi();
             ppu.borrow_mut().emit_nmi = false;
         }
+        bus.borrow_mut().cycle += 1;
     }
 
     pub fn reset(cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {

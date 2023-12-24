@@ -100,7 +100,7 @@ pub fn main() {
                     ..
                 } => {
                     while !cpu.borrow().is_instruction_finished {
-                        Bus::clock(cpu.clone(), ppu.clone());
+                        Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
                     }
                     cpu.borrow_mut().is_instruction_finished = false;
                 }
@@ -115,7 +115,7 @@ pub fn main() {
                     ..
                 } => {
                     while !ppu.borrow().is_frame_ready {
-                        Bus::clock(cpu.clone(), ppu.clone());
+                        Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
                     }
                     ppu.borrow_mut().is_frame_ready = false;
                     ppu.borrow_mut().draw_nametables();
@@ -158,7 +158,7 @@ pub fn main() {
         let frame_start = timer_subsystem.ticks64();
         if run_emulation {
             while !ppu.borrow().is_frame_ready {
-                Bus::clock(cpu.clone(), ppu.clone());
+                Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
             }
             ppu.borrow_mut().is_frame_ready = false;
             ppu.borrow_mut().draw_nametables();
