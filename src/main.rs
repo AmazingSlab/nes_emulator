@@ -131,7 +131,7 @@ pub fn main() {
                     keycode: Some(Keycode::E),
                     ..
                 } => {
-                    if ppu.borrow().palette < 7 {
+                    if ppu.borrow().palette < 3 {
                         ppu.borrow_mut().palette += 1;
                     } else {
                         ppu.borrow_mut().palette = 0;
@@ -144,7 +144,7 @@ pub fn main() {
                     if ppu.borrow().palette > 0 {
                         ppu.borrow_mut().palette -= 1;
                     } else {
-                        ppu.borrow_mut().palette = 7;
+                        ppu.borrow_mut().palette = 3;
                     }
                 }
                 _ => {}

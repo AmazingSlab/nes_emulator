@@ -566,7 +566,12 @@ impl Ppu {
                             let low = (low & (0x80 >> x) > 0) as u8;
                             let high = (high & (0x80 >> x) > 0) as u8;
                             let index = (high << 1) | low;
-                            let color_index = self.sample_palette_ram(self.palette, index);
+                            let palette = if self.control.background_pattern() == table_half as u8 {
+                                self.palette
+                            } else {
+                                self.palette + 4
+                            };
+                            let color_index = self.sample_palette_ram(palette, index);
                             let color = Color::decode(color_index);
 
                             let index = x
