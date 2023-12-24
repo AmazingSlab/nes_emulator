@@ -19,6 +19,7 @@ pub struct Ppu {
     pub buffer: Box<[u8; 256 * 240 * 3]>,
     pub nametable_buffer: Box<[u8; 512 * 480 * 3]>,
     pub pattern_table_buffer: Box<[u8; 256 * 128 * 3]>,
+    pub oam_buffer: Box<[u8; 64 * 64 * 3]>,
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
     oam: [u8; 256],
@@ -70,6 +71,11 @@ impl Ppu {
             Box::from_raw(Box::into_raw(vec![0u8; 256 * 128 * 3].into_boxed_slice())
                 as *mut [u8; 256 * 128 * 3])
         };
+        let oam_buffer = unsafe {
+            Box::from_raw(
+                Box::into_raw(vec![0u8; 64 * 64 * 3].into_boxed_slice()) as *mut [u8; 64 * 64 * 3]
+            )
+        };
 
         Self {
             control: PpuControl::default(),
@@ -81,6 +87,7 @@ impl Ppu {
             buffer,
             nametable_buffer,
             pattern_table_buffer,
+            oam_buffer,
             nametables: [0; 2048],
             palette_ram: [0; 32],
             oam: [0; 256],
@@ -616,6 +623,50 @@ impl Ppu {
                             self.pattern_table_buffer[index * 3 + 2] = color.b;
                         }
                     }
+                }
+            }
+        }
+    }
+
+    pub fn draw_oam(&mut self) {
+        for sprite in 0..64 {
+            let index = self.oam[sprite as usize * 4 + 1] as u16;
+            let attrib = self.oam[sprite as usize * 4 + 2];
+            let palette = attrib & 0x03;
+
+            let mut pattern_low = [0u8; 8];
+            for i in 0..8 {
+                let value = self
+                    .ppu_read(((self.control.sprite_pattern() as u16) << 12) | (index << 4) | i);
+                pattern_low[i as usize] = value;
+            }
+            let mut pattern_high = [0u8; 8];
+            for i in 0..8 {
+                let value = self.ppu_read(
+                    ((self.control.sprite_pattern() as u16) << 12) | (index << 4) | i | 8,
+                );
+                pattern_high[i as usize] = value;
+            }
+
+            let sprite_x = sprite & 0x07;
+            let sprite_y = sprite >> 3;
+
+            for (y, (low, high)) in pattern_low
+                .into_iter()
+                .zip(pattern_high.into_iter())
+                .enumerate()
+            {
+                for x in 0..8 {
+                    let low = (low & (0x80 >> x) > 0) as u8;
+                    let high = (high & (0x80 >> x) > 0) as u8;
+                    let index = (high << 1) | low;
+                    let color_index = self.sample_palette_ram(palette + 4, index);
+                    let color = Color::decode(color_index);
+
+                    let index = x + sprite_x as usize * 8 + (y + sprite_y as usize * 8) * 64;
+                    self.oam_buffer[index * 3] = color.r;
+                    self.oam_buffer[index * 3 + 1] = color.g;
+                    self.oam_buffer[index * 3 + 2] = color.b;
                 }
             }
         }

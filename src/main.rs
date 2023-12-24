@@ -9,6 +9,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 const MAIN_SCALE: u32 = 4;
 const NAMETABLE_SCALE: u32 = 2;
 const PATTERN_SCALE: u32 = 3;
+const OAM_SCALE: u32 = 4;
 const FPS: u64 = 60;
 
 pub fn main() {
@@ -42,6 +43,11 @@ pub fn main() {
         .position(400, 400)
         .build()
         .unwrap();
+    let oam_window = video_subsystem
+        .window("OAM Viewer", 64 * OAM_SCALE, 64 * OAM_SCALE)
+        .position(600, 600)
+        .build()
+        .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
     canvas
@@ -68,6 +74,15 @@ pub fn main() {
     let pattern_texture_creator = pattern_canvas.texture_creator();
     let mut pattern_texture = pattern_texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 256, 128)
+        .unwrap();
+
+    let mut oam_canvas = oam_window.into_canvas().build().unwrap();
+    oam_canvas
+        .set_scale(OAM_SCALE as f32, OAM_SCALE as f32)
+        .unwrap();
+    let oam_texture_creator = oam_canvas.texture_creator();
+    let mut oam_texture = oam_texture_creator
+        .create_texture_streaming(PixelFormatEnum::RGB24, 64, 64)
         .unwrap();
 
     let rom = std::fs::read(rom_path).expect("failed to read rom");
@@ -120,6 +135,7 @@ pub fn main() {
                     ppu.borrow_mut().is_frame_ready = false;
                     ppu.borrow_mut().draw_nametables();
                     ppu.borrow_mut().draw_pattern_tables();
+                    ppu.borrow_mut().draw_oam();
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
@@ -163,6 +179,7 @@ pub fn main() {
             ppu.borrow_mut().is_frame_ready = false;
             ppu.borrow_mut().draw_nametables();
             ppu.borrow_mut().draw_pattern_tables();
+            ppu.borrow_mut().draw_oam();
         }
         let frame_end = timer_subsystem.ticks64();
         let delta = frame_end - frame_start;
@@ -193,9 +210,17 @@ pub fn main() {
             .unwrap();
         pattern_canvas.copy(&pattern_texture, None, None).unwrap();
 
+        oam_texture
+            .with_lock(None, |buffer, _| {
+                buffer.copy_from_slice(&*ppu.borrow().oam_buffer);
+            })
+            .unwrap();
+        oam_canvas.copy(&oam_texture, None, None).unwrap();
+
         canvas.present();
         nametable_canvas.present();
         pattern_canvas.present();
+        oam_canvas.present();
     }
 }
 
