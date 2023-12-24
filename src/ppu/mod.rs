@@ -47,6 +47,27 @@ pub struct Ppu {
 
 impl Ppu {
     pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
+        // Allocate directly on the heap without going through the stack.
+        // This is necessary to avoid stack overflows in debug builds without having to sacrifice
+        // the array length guarantee, as without optimizations, Box::new([T; N]) allocates the
+        // array on the stack before moving to the heap.
+        //
+        // SAFETY: A raw pointer to memory previously owned by a Box is always safe to turn back
+        // into a Box. Casting to a fixed-size array pointer is safe because the Vec is guaranteed
+        // to have the same number of elements.
+        let buffer = unsafe {
+            Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 3].into_boxed_slice())
+                as *mut [u8; 256 * 240 * 3])
+        };
+        let nametable_buffer = unsafe {
+            Box::from_raw(Box::into_raw(vec![0u8; 512 * 480 * 3].into_boxed_slice())
+                as *mut [u8; 512 * 480 * 3])
+        };
+        let pattern_table_buffer = unsafe {
+            Box::from_raw(Box::into_raw(vec![0u8; 256 * 128 * 3].into_boxed_slice())
+                as *mut [u8; 256 * 128 * 3])
+        };
+
         Self {
             control: PpuControl::default(),
             mask: PpuMask::default(),
@@ -54,9 +75,9 @@ impl Ppu {
 
             bus: Weak::new(),
             cartridge,
-            buffer: Box::new([0; 256 * 240 * 3]),
-            nametable_buffer: Box::new([0; 512 * 480 * 3]),
-            pattern_table_buffer: Box::new([0; 256 * 128 * 3]),
+            buffer,
+            nametable_buffer,
+            pattern_table_buffer,
             nametables: [0; 2048],
             palette_ram: [0; 32],
             cycle: 0,
