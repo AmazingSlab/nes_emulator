@@ -152,6 +152,7 @@ pub fn main() {
                     } else {
                         ppu.borrow_mut().palette = 0;
                     }
+                    ppu.borrow_mut().draw_pattern_tables();
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Q),
@@ -162,6 +163,7 @@ pub fn main() {
                     } else {
                         ppu.borrow_mut().palette = 3;
                     }
+                    ppu.borrow_mut().draw_pattern_tables();
                 }
                 _ => {}
             }
