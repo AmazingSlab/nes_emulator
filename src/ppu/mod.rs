@@ -43,6 +43,13 @@ pub struct Ppu {
     next_tile_pattern_low: u8,
     next_tile_pattern_high: u8,
 
+    secondary_oam: [u8; 32],
+    secondary_oam_sprite_count: u8,
+    sprite_pattern_shift_low: [u8; 8],
+    sprite_pattern_shift_high: [u8; 8],
+    sprite_attrib: [u8; 8],
+    sprite_x_pos: [u8; 8],
+
     pub is_frame_ready: bool,
     pub emit_nmi: bool,
     pub palette: u8,
@@ -111,6 +118,13 @@ impl Ppu {
             next_tile_pattern_low: 0,
             next_tile_pattern_high: 0,
 
+            secondary_oam: [0; 32],
+            secondary_oam_sprite_count: 0,
+            sprite_pattern_shift_low: [0; 8],
+            sprite_pattern_shift_high: [0; 8],
+            sprite_attrib: [0; 8],
+            sprite_x_pos: [0; 8],
+
             is_frame_ready: false,
             emit_nmi: false,
             palette: 0,
@@ -150,6 +164,16 @@ impl Ppu {
 
     pub fn clock(&mut self) {
         if self.scanline <= 239 || self.scanline == 261 {
+            if self.cycle <= 257 {
+                for i in 0..8 {
+                    if self.sprite_x_pos[i] != 0 {
+                        self.sprite_x_pos[i] -= 1;
+                    } else {
+                        self.sprite_pattern_shift_low[i] <<= 1;
+                        self.sprite_pattern_shift_high[i] <<= 1;
+                    }
+                }
+            }
             if (self.cycle >= 2 && self.cycle <= 257) || (self.cycle >= 321 && self.cycle <= 337) {
                 self.update_shift_registers();
 
@@ -236,15 +260,96 @@ impl Ppu {
                 self.scanline = 0;
             }
         }
-        let bit_mux = 0x8000 >> self.fine_x_scroll as u16;
-        let pattern_low = ((self.pattern_table_shift_low & bit_mux) > 0) as u8;
-        let pattern_high = ((self.pattern_table_shift_high & bit_mux) > 0) as u8;
-        let attrib_low = ((self.palette_attrib_shift_low & bit_mux) > 0) as u8;
-        let attrib_high = ((self.palette_attrib_shift_high & bit_mux) > 0) as u8;
+        if self.scanline <= 239 {
+            if self.cycle == 64 {
+                self.secondary_oam = [0xFF; 32];
+                self.secondary_oam_sprite_count = 0;
+            }
+            if self.cycle == 257 {
+                for sprite in 0..64 {
+                    let y_pos = self.oam[sprite * 4];
+                    if self.scanline.wrapping_sub(y_pos as u16) < 8 {
+                        for i in 0..4 {
+                            self.secondary_oam[self.secondary_oam_sprite_count as usize * 4 + i] =
+                                self.oam[sprite * 4 + i];
+                        }
+                        self.secondary_oam_sprite_count += 1;
+                        if self.secondary_oam_sprite_count == 8 {
+                            break;
+                        }
+                    }
+                }
+            }
+            if self.cycle == 320 {
+                for i in 0..8 {
+                    self.sprite_x_pos[i] = self.secondary_oam[i * 4 + 3];
+                    let y_pos = self.secondary_oam[i * 4];
+                    let index = self.secondary_oam[i * 4 + 1];
+                    let attrib = self.secondary_oam[i * 4 + 2];
+                    let line = (self.scanline.wrapping_sub(y_pos as u16)) & 0x07;
+                    let pattern_low = self.ppu_read(
+                        ((self.control.sprite_pattern() as u16) << 12)
+                            | ((index as u16) << 4)
+                            | line,
+                    );
+                    let pattern_high = self.ppu_read(
+                        ((self.control.sprite_pattern() as u16) << 12)
+                            | ((index as u16) << 4)
+                            | 8
+                            | line,
+                    );
+                    self.sprite_pattern_shift_low[i] = pattern_low;
+                    self.sprite_pattern_shift_high[i] = pattern_high;
+                    self.sprite_attrib[i] = attrib;
+                }
+            }
+        }
 
-        let palette = (attrib_high << 1) | attrib_low;
-        let index = (pattern_high << 1) | pattern_low;
-        let color_index = self.sample_palette_ram(palette, index);
+        let bit_mux = 0x8000 >> self.fine_x_scroll as u16;
+        let background_pattern_low = ((self.pattern_table_shift_low & bit_mux) > 0) as u8;
+        let background_pattern_high = ((self.pattern_table_shift_high & bit_mux) > 0) as u8;
+        let background_attrib_low = ((self.palette_attrib_shift_low & bit_mux) > 0) as u8;
+        let background_attrib_high = ((self.palette_attrib_shift_high & bit_mux) > 0) as u8;
+
+        let background_palette = (background_attrib_high << 1) | background_attrib_low;
+        let background_index = (background_pattern_high << 1) | background_pattern_low;
+
+        let mut sprite_pattern = 0;
+        let mut sprite_palette = 0;
+        let mut sprite_attrib = 0;
+        for sprite in 0..8 {
+            if self.sprite_x_pos[sprite] != 0 {
+                continue;
+            }
+            let pattern_low = (self.sprite_pattern_shift_low[sprite] & 0x80 > 0) as u8;
+            let pattern_high = (self.sprite_pattern_shift_high[sprite] & 0x80 > 0) as u8;
+            let pattern = (pattern_high << 1) | pattern_low;
+            if pattern != 0 {
+                sprite_pattern = pattern;
+                let attrib = self.sprite_attrib[sprite];
+                sprite_palette = attrib & 0x03;
+                sprite_attrib = attrib;
+                break;
+            }
+        }
+        let sprite_pattern = sprite_pattern;
+        let sprite_palette = sprite_palette;
+
+        let mut color_index = 0;
+        if background_index == 0 && sprite_pattern != 0 {
+            color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
+        } else if background_index != 0 && sprite_pattern == 0 {
+            color_index = self.sample_palette_ram(background_palette, background_index);
+        } else if background_index != 0 && sprite_pattern != 0 {
+            if sprite_attrib & (1 << 5) == 0 {
+                color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
+            } else {
+                color_index = self.sample_palette_ram(background_palette, background_index);
+            }
+        } else if background_index == 0 && sprite_palette == 0 {
+            color_index = self.sample_palette_ram(0, 0);
+        }
+
         let color = Color::decode(color_index);
 
         self.draw_pixel(self.cycle.saturating_sub(1), self.scanline, color);
