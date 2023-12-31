@@ -667,7 +667,11 @@ impl Ppu {
                                 let low = (low & (0x80 >> x) > 0) as u8;
                                 let high = (high & (0x80 >> x) > 0) as u8;
                                 let index = (high << 1) | low;
-                                let color_index = self.sample_palette_ram(attrib, index);
+                                let color_index = if index != 0 {
+                                    self.sample_palette_ram(attrib, index)
+                                } else {
+                                    self.sample_palette_ram(0, 0)
+                                };
                                 let color = Color::decode(color_index);
 
                                 let index = x
