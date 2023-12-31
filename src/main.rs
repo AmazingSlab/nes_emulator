@@ -169,8 +169,9 @@ pub fn main() {
             }
         }
 
-        let controller_state = get_controller_state(&event_pump);
-        bus.borrow_mut().set_controller_state(controller_state);
+        let (controller_1, controller_2) = get_controller_state(&event_pump);
+        bus.borrow_mut()
+            .set_controller_state(controller_1, controller_2);
 
         let desired_delta = 1000 / FPS;
         let frame_start = timer_subsystem.ticks64();
@@ -226,11 +227,11 @@ pub fn main() {
     }
 }
 
-fn get_controller_state(event_pump: &sdl2::EventPump) -> Controller {
+fn get_controller_state(event_pump: &sdl2::EventPump) -> (Controller, Controller) {
     let keyboard_state = event_pump.keyboard_state();
     let key = |key: Scancode| keyboard_state.is_scancode_pressed(key);
 
-    Controller::new()
+    let controller_1 = Controller::new()
         .with_a(key(Scancode::X))
         .with_b(key(Scancode::Z))
         .with_select(key(Scancode::RShift))
@@ -238,5 +239,15 @@ fn get_controller_state(event_pump: &sdl2::EventPump) -> Controller {
         .with_up(key(Scancode::Up))
         .with_down(key(Scancode::Down))
         .with_left(key(Scancode::Left))
-        .with_right(key(Scancode::Right))
+        .with_right(key(Scancode::Right));
+
+    let controller_2 = Controller::new()
+        .with_a(key(Scancode::H))
+        .with_b(key(Scancode::G))
+        .with_up(key(Scancode::W))
+        .with_down(key(Scancode::S))
+        .with_left(key(Scancode::A))
+        .with_right(key(Scancode::D));
+
+    (controller_1, controller_2)
 }

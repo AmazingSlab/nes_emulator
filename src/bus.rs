@@ -8,8 +8,10 @@ pub struct Bus {
     ram: [u8; 2048],
     ppu: Rc<RefCell<Ppu>>,
     cartridge: Rc<RefCell<Cartridge>>,
-    controller: Controller,
-    controller_state: Controller,
+    controller_1: Controller,
+    controller_1_state: Controller,
+    controller_2: Controller,
+    controller_2_state: Controller,
     controller_strobe: bool,
 
     cycle: usize,
@@ -30,8 +32,10 @@ impl Bus {
             ram,
             ppu,
             cartridge,
-            controller: Controller::default(),
-            controller_state: Controller::default(),
+            controller_1: Controller::default(),
+            controller_1_state: Controller::default(),
+            controller_2: Controller::default(),
+            controller_2_state: Controller::default(),
             controller_strobe: false,
 
             cycle: 0,
@@ -48,8 +52,13 @@ impl Bus {
         })
     }
 
-    pub fn set_controller_state(&mut self, controller_state: Controller) {
-        self.controller = controller_state;
+    pub fn set_controller_state(
+        &mut self,
+        controller_1_state: Controller,
+        controller_2_state: Controller,
+    ) {
+        self.controller_1 = controller_1_state;
+        self.controller_2 = controller_2_state;
     }
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {
@@ -59,10 +68,18 @@ impl Bus {
             0x4014 => self.ppu.borrow_mut().cpu_read(addr),
             0x4016 => {
                 if self.controller_strobe {
-                    self.controller_state = self.controller;
+                    self.controller_1_state = self.controller_1;
                 }
-                let data = self.controller_state.0 & 0x01;
-                self.controller_state.0 >>= 1;
+                let data = self.controller_1_state.0 & 0x01;
+                self.controller_1_state.0 >>= 1;
+                data
+            }
+            0x4017 => {
+                if self.controller_strobe {
+                    self.controller_2_state = self.controller_2;
+                }
+                let data = self.controller_2_state.0 & 0x01;
+                self.controller_2_state.0 >>= 1;
                 data
             }
             0x4020..=0xFFFF => self.cartridge.borrow().cpu_read(addr),
@@ -81,7 +98,8 @@ impl Bus {
             }
             0x4016 => {
                 self.controller_strobe = (data & 0x01) != 0;
-                self.controller_state = self.controller;
+                self.controller_1_state = self.controller_1;
+                self.controller_2_state = self.controller_2;
             }
             0x4020..=0xFFFF => self.cartridge.borrow_mut().cpu_write(addr, data),
             _ => (),
