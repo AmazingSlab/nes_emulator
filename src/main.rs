@@ -231,8 +231,8 @@ fn get_controller_state(event_pump: &sdl2::EventPump) -> Controller {
     let key = |key: Scancode| keyboard_state.is_scancode_pressed(key);
 
     Controller::new()
-        .with_a(key(Scancode::Z))
-        .with_b(key(Scancode::X))
+        .with_a(key(Scancode::X))
+        .with_b(key(Scancode::Z))
         .with_select(key(Scancode::RShift))
         .with_start(key(Scancode::Return))
         .with_up(key(Scancode::Up))
