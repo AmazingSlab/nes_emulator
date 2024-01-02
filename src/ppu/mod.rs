@@ -752,19 +752,29 @@ impl Ppu {
             let index = self.oam[sprite as usize * 4 + 1] as u16;
             let attrib = self.oam[sprite as usize * 4 + 2];
             let palette = attrib & 0x03;
+            let flip_horizontally = attrib & (1 << 6) != 0;
+            let flip_vertically = attrib & (1 << 7) != 0;
 
             let mut pattern_low = [0u8; 8];
             for i in 0..8 {
                 let value = self
                     .ppu_read(((self.control.sprite_pattern() as u16) << 12) | (index << 4) | i);
-                pattern_low[i as usize] = value;
+                pattern_low[i as usize] = if flip_horizontally {
+                    value.reverse_bits()
+                } else {
+                    value
+                };
             }
             let mut pattern_high = [0u8; 8];
             for i in 0..8 {
                 let value = self.ppu_read(
                     ((self.control.sprite_pattern() as u16) << 12) | (index << 4) | i | 8,
                 );
-                pattern_high[i as usize] = value;
+                pattern_high[i as usize] = if flip_horizontally {
+                    value.reverse_bits()
+                } else {
+                    value
+                };
             }
 
             let sprite_x = sprite & 0x07;
@@ -775,6 +785,7 @@ impl Ppu {
                 .zip(pattern_high.into_iter())
                 .enumerate()
             {
+                let y = if flip_vertically { 7 - y } else { y };
                 for x in 0..8 {
                     let low = (low & (0x80 >> x) > 0) as u8;
                     let high = (high & (0x80 >> x) > 0) as u8;
