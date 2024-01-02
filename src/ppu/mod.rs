@@ -287,7 +287,10 @@ impl Ppu {
                     let y_pos = self.secondary_oam[i * 4];
                     let index = self.secondary_oam[i * 4 + 1];
                     let attrib = self.secondary_oam[i * 4 + 2];
+                    let flip_horizontally = attrib & (1 << 6) != 0;
+                    let flip_vertically = attrib & (1 << 7) != 0;
                     let line = (self.scanline.wrapping_sub(y_pos as u16)) & 0x07;
+                    let line = if flip_vertically { 7 - line } else { line };
                     let pattern_low = self.ppu_read(
                         ((self.control.sprite_pattern() as u16) << 12)
                             | ((index as u16) << 4)
@@ -299,6 +302,11 @@ impl Ppu {
                             | 8
                             | line,
                     );
+                    let (pattern_low, pattern_high) = if flip_horizontally {
+                        (pattern_low.reverse_bits(), pattern_high.reverse_bits())
+                    } else {
+                        (pattern_low, pattern_high)
+                    };
                     self.sprite_pattern_shift_low[i] = pattern_low;
                     self.sprite_pattern_shift_high[i] = pattern_high;
                     self.sprite_attrib[i] = attrib;
