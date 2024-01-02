@@ -164,7 +164,7 @@ impl Ppu {
 
     pub fn clock(&mut self) {
         if self.scanline <= 239 || self.scanline == 261 {
-            if self.cycle >= 2 && self.cycle <= 257 {
+            if self.cycle >= 2 && self.cycle <= 257 && self.mask.show_sprites() {
                 for i in 0..8 {
                     if self.sprite_x_pos[i] != 0 {
                         self.sprite_x_pos[i] -= 1;
