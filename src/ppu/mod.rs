@@ -245,6 +245,7 @@ impl Ppu {
         if self.scanline == 261 {
             if self.cycle == 1 {
                 self.status.set_vblank(false);
+                self.status.set_sprite_zero_hit(false);
                 self.is_frame_ready = true;
                 self.is_odd_frame = !self.is_odd_frame;
             }
@@ -341,6 +342,7 @@ impl Ppu {
         } else if background_index != 0 && sprite_pattern == 0 {
             color_index = self.sample_palette_ram(background_palette, background_index);
         } else if background_index != 0 && sprite_pattern != 0 {
+            self.status.set_sprite_zero_hit(true);
             if sprite_attrib & (1 << 5) == 0 {
                 color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
             } else {
