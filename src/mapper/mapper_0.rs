@@ -1,6 +1,5 @@
 use super::{Mapper, Mirroring};
 
-#[derive(Debug)]
 pub struct Mapper0 {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,

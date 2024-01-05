@@ -2,7 +2,6 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{concat_bytes, Cartridge, Controller, Cpu, Ppu};
 
-#[derive(Debug)]
 pub struct Bus {
     cpu: Rc<RefCell<Cpu>>,
     ram: [u8; 2048],

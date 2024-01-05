@@ -6,7 +6,6 @@ use crate::{
     Bus,
 };
 
-#[derive(Debug)]
 pub struct Cartridge {
     mapper: Box<dyn Mapper>,
     bus: Weak<RefCell<Bus>>,

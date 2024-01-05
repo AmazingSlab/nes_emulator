@@ -12,7 +12,7 @@ pub use instruction::Instruction;
 use crate::{concat_bytes, high_byte, is_bit_set, low_byte, Bus};
 
 /// The 6502 CPU powering the NES.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Cpu {
     accumulator: u8,
     x_register: u8,

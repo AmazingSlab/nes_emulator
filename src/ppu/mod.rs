@@ -8,7 +8,6 @@ mod color;
 use crate::{mapper::Mirroring, Bus, Cartridge};
 use color::Color;
 
-#[derive(Debug)]
 pub struct Ppu {
     control: PpuControl,
     mask: PpuMask,
