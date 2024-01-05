@@ -5,7 +5,7 @@ use std::{
 
 mod color;
 
-use crate::{cartridge::Mirroring, Bus, Cartridge};
+use crate::{mapper::Mirroring, Bus, Cartridge};
 use color::Color;
 
 #[derive(Debug)]

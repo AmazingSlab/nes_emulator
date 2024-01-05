@@ -1,6 +1,7 @@
 mod bus;
 mod cartridge;
 pub mod cpu;
+pub mod mapper;
 pub mod ppu;
 
 pub use bus::Bus;
