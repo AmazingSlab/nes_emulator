@@ -15,13 +15,13 @@ pub struct Ppu {
 
     bus: Weak<RefCell<Bus>>,
     cartridge: Rc<RefCell<Cartridge>>,
-    pub buffer: Box<[u8; 256 * 240 * 3]>,
+    buffer: Box<[u8; 256 * 240 * 3]>,
     #[cfg(feature = "memview")]
-    pub nametable_buffer: Box<[u8; 512 * 480 * 3]>,
+    nametable_buffer: Box<[u8; 512 * 480 * 3]>,
     #[cfg(feature = "memview")]
-    pub pattern_table_buffer: Box<[u8; 256 * 128 * 3]>,
+    pattern_table_buffer: Box<[u8; 256 * 128 * 3]>,
     #[cfg(feature = "memview")]
-    pub oam_buffer: Box<[u8; 64 * 64 * 3]>,
+    oam_buffer: Box<[u8; 64 * 64 * 3]>,
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
     oam: [u8; 256],
@@ -170,6 +170,25 @@ impl Ppu {
 
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
+    }
+
+    pub fn buffer(&self) -> &[u8] {
+        self.buffer.as_ref()
+    }
+
+    #[cfg(feature = "memview")]
+    pub fn nametable_buffer(&self) -> &[u8] {
+        self.nametable_buffer.as_ref()
+    }
+
+    #[cfg(feature = "memview")]
+    pub fn pattern_table_buffer(&self) -> &[u8] {
+        self.pattern_table_buffer.as_ref()
+    }
+
+    #[cfg(feature = "memview")]
+    pub fn oam_buffer(&self) -> &[u8] {
+        self.oam_buffer.as_ref()
     }
 
     pub fn clock(&mut self) {

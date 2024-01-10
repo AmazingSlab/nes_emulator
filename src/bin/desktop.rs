@@ -222,7 +222,7 @@ pub fn main() {
 
         texture
             .with_lock(None, |buffer, _| {
-                buffer.copy_from_slice(&*ppu.borrow().buffer);
+                buffer.copy_from_slice(ppu.borrow().buffer());
             })
             .unwrap();
         canvas.copy(&texture, None, None).unwrap();
@@ -230,7 +230,7 @@ pub fn main() {
         #[cfg(feature = "memview")]
         nametable_texture
             .with_lock(None, |buffer, _| {
-                buffer.copy_from_slice(&*ppu.borrow().nametable_buffer);
+                buffer.copy_from_slice(ppu.borrow().nametable_buffer());
             })
             .unwrap();
         #[cfg(feature = "memview")]
@@ -241,7 +241,7 @@ pub fn main() {
         #[cfg(feature = "memview")]
         pattern_texture
             .with_lock(None, |buffer, _| {
-                buffer.copy_from_slice(&*ppu.borrow().pattern_table_buffer);
+                buffer.copy_from_slice(ppu.borrow().pattern_table_buffer());
             })
             .unwrap();
         #[cfg(feature = "memview")]
@@ -250,7 +250,7 @@ pub fn main() {
         #[cfg(feature = "memview")]
         oam_texture
             .with_lock(None, |buffer, _| {
-                buffer.copy_from_slice(&*ppu.borrow().oam_buffer);
+                buffer.copy_from_slice(ppu.borrow().oam_buffer());
             })
             .unwrap();
         #[cfg(feature = "memview")]
