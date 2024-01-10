@@ -16,8 +16,11 @@ pub struct Ppu {
     bus: Weak<RefCell<Bus>>,
     cartridge: Rc<RefCell<Cartridge>>,
     pub buffer: Box<[u8; 256 * 240 * 3]>,
+    #[cfg(feature = "memview")]
     pub nametable_buffer: Box<[u8; 512 * 480 * 3]>,
+    #[cfg(feature = "memview")]
     pub pattern_table_buffer: Box<[u8; 256 * 128 * 3]>,
+    #[cfg(feature = "memview")]
     pub oam_buffer: Box<[u8; 64 * 64 * 3]>,
     nametables: [u8; 2048],
     palette_ram: [u8; 32],
@@ -51,6 +54,7 @@ pub struct Ppu {
 
     pub is_frame_ready: bool,
     pub emit_nmi: bool,
+    #[cfg(feature = "memview")]
     pub palette: u8,
     is_odd_frame: bool,
 }
@@ -69,14 +73,17 @@ impl Ppu {
             Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 3].into_boxed_slice())
                 as *mut [u8; 256 * 240 * 3])
         };
+        #[cfg(feature = "memview")]
         let nametable_buffer = unsafe {
             Box::from_raw(Box::into_raw(vec![0u8; 512 * 480 * 3].into_boxed_slice())
                 as *mut [u8; 512 * 480 * 3])
         };
+        #[cfg(feature = "memview")]
         let pattern_table_buffer = unsafe {
             Box::from_raw(Box::into_raw(vec![0u8; 256 * 128 * 3].into_boxed_slice())
                 as *mut [u8; 256 * 128 * 3])
         };
+        #[cfg(feature = "memview")]
         let oam_buffer = unsafe {
             Box::from_raw(
                 Box::into_raw(vec![0u8; 64 * 64 * 3].into_boxed_slice()) as *mut [u8; 64 * 64 * 3]
@@ -91,8 +98,11 @@ impl Ppu {
             bus: Weak::new(),
             cartridge,
             buffer,
+            #[cfg(feature = "memview")]
             nametable_buffer,
+            #[cfg(feature = "memview")]
             pattern_table_buffer,
+            #[cfg(feature = "memview")]
             oam_buffer,
             nametables: [0; 2048],
             palette_ram: [0; 32],
@@ -126,6 +136,7 @@ impl Ppu {
 
             is_frame_ready: false,
             emit_nmi: false,
+            #[cfg(feature = "memview")]
             palette: 0,
             is_odd_frame: false,
         }
@@ -627,6 +638,7 @@ impl Ppu {
         }
     }
 
+    #[cfg(feature = "memview")]
     pub fn draw_nametables(&mut self) {
         for nametable_y in 0..=1 {
             for nametable_x in 0..=1 {
@@ -698,6 +710,7 @@ impl Ppu {
         }
     }
 
+    #[cfg(feature = "memview")]
     pub fn draw_pattern_tables(&mut self) {
         for table_half in 0..=1 {
             for tile_y in 0..16 {
@@ -746,6 +759,7 @@ impl Ppu {
         }
     }
 
+    #[cfg(feature = "memview")]
     pub fn draw_oam(&mut self) {
         for sprite in 0..64 {
             let index = self.oam[sprite as usize * 4 + 1] as u16;

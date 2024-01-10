@@ -7,10 +7,14 @@ use sdl2::{
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 const MAIN_SCALE: u32 = 4;
-const NAMETABLE_SCALE: u32 = 2;
-const PATTERN_SCALE: u32 = 3;
-const OAM_SCALE: u32 = 4;
 const FPS: u64 = 60;
+
+#[cfg(feature = "memview")]
+const NAMETABLE_SCALE: u32 = 2;
+#[cfg(feature = "memview")]
+const PATTERN_SCALE: u32 = 3;
+#[cfg(feature = "memview")]
+const OAM_SCALE: u32 = 4;
 
 pub fn main() {
     let mut args = std::env::args();
@@ -25,6 +29,8 @@ pub fn main() {
         .position_centered()
         .build()
         .unwrap();
+
+    #[cfg(feature = "memview")]
     let nametable_window = video_subsystem
         .window(
             "Nametable Viewer",
@@ -34,6 +40,8 @@ pub fn main() {
         .position(200, 200)
         .build()
         .unwrap();
+
+    #[cfg(feature = "memview")]
     let pattern_window = video_subsystem
         .window(
             "Pattern Table Viewer",
@@ -43,6 +51,8 @@ pub fn main() {
         .position(400, 400)
         .build()
         .unwrap();
+
+    #[cfg(feature = "memview")]
     let oam_window = video_subsystem
         .window("OAM Viewer", 64 * OAM_SCALE, 64 * OAM_SCALE)
         .position(600, 600)
@@ -58,29 +68,41 @@ pub fn main() {
         .create_texture_streaming(PixelFormatEnum::RGB24, 256, 240)
         .unwrap();
 
+    #[cfg(feature = "memview")]
     let mut nametable_canvas = nametable_window.into_canvas().build().unwrap();
+    #[cfg(feature = "memview")]
     nametable_canvas
         .set_scale(NAMETABLE_SCALE as f32, NAMETABLE_SCALE as f32)
         .unwrap();
+    #[cfg(feature = "memview")]
     let nametable_texture_creator = nametable_canvas.texture_creator();
+    #[cfg(feature = "memview")]
     let mut nametable_texture = nametable_texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 512, 480)
         .unwrap();
 
+    #[cfg(feature = "memview")]
     let mut pattern_canvas = pattern_window.into_canvas().build().unwrap();
+    #[cfg(feature = "memview")]
     pattern_canvas
         .set_scale(PATTERN_SCALE as f32, PATTERN_SCALE as f32)
         .unwrap();
+    #[cfg(feature = "memview")]
     let pattern_texture_creator = pattern_canvas.texture_creator();
+    #[cfg(feature = "memview")]
     let mut pattern_texture = pattern_texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 256, 128)
         .unwrap();
 
+    #[cfg(feature = "memview")]
     let mut oam_canvas = oam_window.into_canvas().build().unwrap();
+    #[cfg(feature = "memview")]
     oam_canvas
         .set_scale(OAM_SCALE as f32, OAM_SCALE as f32)
         .unwrap();
+    #[cfg(feature = "memview")]
     let oam_texture_creator = oam_canvas.texture_creator();
+    #[cfg(feature = "memview")]
     let mut oam_texture = oam_texture_creator
         .create_texture_streaming(PixelFormatEnum::RGB24, 64, 64)
         .unwrap();
@@ -133,9 +155,12 @@ pub fn main() {
                         Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
                     }
                     ppu.borrow_mut().is_frame_ready = false;
-                    ppu.borrow_mut().draw_nametables();
-                    ppu.borrow_mut().draw_pattern_tables();
-                    ppu.borrow_mut().draw_oam();
+                    #[cfg(feature = "memview")]
+                    {
+                        ppu.borrow_mut().draw_nametables();
+                        ppu.borrow_mut().draw_pattern_tables();
+                        ppu.borrow_mut().draw_oam();
+                    }
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
@@ -143,6 +168,7 @@ pub fn main() {
                 } => {
                     Bus::reset(cpu.clone(), ppu.clone());
                 }
+                #[cfg(feature = "memview")]
                 Event::KeyDown {
                     keycode: Some(Keycode::E),
                     ..
@@ -154,6 +180,7 @@ pub fn main() {
                     }
                     ppu.borrow_mut().draw_pattern_tables();
                 }
+                #[cfg(feature = "memview")]
                 Event::KeyDown {
                     keycode: Some(Keycode::Q),
                     ..
@@ -180,9 +207,12 @@ pub fn main() {
                 Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
             }
             ppu.borrow_mut().is_frame_ready = false;
-            ppu.borrow_mut().draw_nametables();
-            ppu.borrow_mut().draw_pattern_tables();
-            ppu.borrow_mut().draw_oam();
+            #[cfg(feature = "memview")]
+            {
+                ppu.borrow_mut().draw_nametables();
+                ppu.borrow_mut().draw_pattern_tables();
+                ppu.borrow_mut().draw_oam();
+            }
         }
         let frame_end = timer_subsystem.ticks64();
         let delta = frame_end - frame_start;
@@ -197,33 +227,42 @@ pub fn main() {
             .unwrap();
         canvas.copy(&texture, None, None).unwrap();
 
+        #[cfg(feature = "memview")]
         nametable_texture
             .with_lock(None, |buffer, _| {
                 buffer.copy_from_slice(&*ppu.borrow().nametable_buffer);
             })
             .unwrap();
+        #[cfg(feature = "memview")]
         nametable_canvas
             .copy(&nametable_texture, None, None)
             .unwrap();
 
+        #[cfg(feature = "memview")]
         pattern_texture
             .with_lock(None, |buffer, _| {
                 buffer.copy_from_slice(&*ppu.borrow().pattern_table_buffer);
             })
             .unwrap();
+        #[cfg(feature = "memview")]
         pattern_canvas.copy(&pattern_texture, None, None).unwrap();
 
+        #[cfg(feature = "memview")]
         oam_texture
             .with_lock(None, |buffer, _| {
                 buffer.copy_from_slice(&*ppu.borrow().oam_buffer);
             })
             .unwrap();
+        #[cfg(feature = "memview")]
         oam_canvas.copy(&oam_texture, None, None).unwrap();
 
         canvas.present();
-        nametable_canvas.present();
-        pattern_canvas.present();
-        oam_canvas.present();
+        #[cfg(feature = "memview")]
+        {
+            nametable_canvas.present();
+            pattern_canvas.present();
+            oam_canvas.present();
+        }
     }
 }
 
