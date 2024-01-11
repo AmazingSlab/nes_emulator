@@ -8,12 +8,18 @@ edition = "2021"
 [dependencies]
 bitfield-struct = "0.5.6"
 bitflags = "2.4.0"
+console_error_panic_hook = { version = "0.1.7", optional = true }
 sdl2 = { version = "0.36.0", optional = true }
+wasm-bindgen = { version = "0.2.89", optional = true }
 
 [features]
 logging = []
 memview = []
 desktop = ["sdl2"]
+wasm = ["wasm-bindgen", "console_error_panic_hook"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "desktop"

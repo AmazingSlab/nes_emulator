@@ -15,7 +15,10 @@ pub struct Ppu {
 
     bus: Weak<RefCell<Bus>>,
     cartridge: Rc<RefCell<Cartridge>>,
+    #[cfg(not(feature = "wasm"))]
     buffer: Box<[u8; 256 * 240 * 3]>,
+    #[cfg(feature = "wasm")]
+    buffer: Box<[u8; 256 * 240 * 4]>,
     #[cfg(feature = "memview")]
     nametable_buffer: Box<[u8; 512 * 480 * 3]>,
     #[cfg(feature = "memview")]
@@ -54,7 +57,6 @@ pub struct Ppu {
 
     pub is_frame_ready: bool,
     pub emit_nmi: bool,
-    #[cfg(feature = "memview")]
     pub palette: u8,
     is_odd_frame: bool,
 }
@@ -69,9 +71,15 @@ impl Ppu {
         // SAFETY: A raw pointer to memory previously owned by a Box is always safe to turn back
         // into a Box. Casting to a fixed-size array pointer is safe because the Vec is guaranteed
         // to have the same number of elements.
+        #[cfg(not(feature = "wasm"))]
         let buffer = unsafe {
             Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 3].into_boxed_slice())
                 as *mut [u8; 256 * 240 * 3])
+        };
+        #[cfg(feature = "wasm")]
+        let buffer = unsafe {
+            Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 4].into_boxed_slice())
+                as *mut [u8; 256 * 240 * 4])
         };
         #[cfg(feature = "memview")]
         let nametable_buffer = unsafe {
@@ -136,7 +144,6 @@ impl Ppu {
 
             is_frame_ready: false,
             emit_nmi: false,
-            #[cfg(feature = "memview")]
             palette: 0,
             is_odd_frame: false,
         }
@@ -172,8 +179,14 @@ impl Ppu {
         self.bus = bus;
     }
 
+    #[cfg(not(feature = "wasm"))]
     pub fn buffer(&self) -> &[u8] {
         self.buffer.as_ref()
+    }
+
+    #[cfg(feature = "wasm")]
+    pub fn buffer_raw(&self) -> *const u8 {
+        self.buffer.as_ptr()
     }
 
     #[cfg(feature = "memview")]
@@ -834,6 +847,7 @@ impl Ppu {
         }
     }
 
+    #[cfg(not(feature = "wasm"))]
     fn draw_pixel(&mut self, x: u16, y: u16, color: Color) {
         if x >= 256 || y >= 240 {
             return;
@@ -842,6 +856,18 @@ impl Ppu {
         self.buffer[index * 3] = color.r;
         self.buffer[index * 3 + 1] = color.g;
         self.buffer[index * 3 + 2] = color.b;
+    }
+
+    #[cfg(feature = "wasm")]
+    fn draw_pixel(&mut self, x: u16, y: u16, color: Color) {
+        if x >= 256 || y >= 240 {
+            return;
+        }
+        let index = (x + y * 256) as usize;
+        self.buffer[index * 4] = color.r;
+        self.buffer[index * 4 + 1] = color.g;
+        self.buffer[index * 4 + 2] = color.b;
+        self.buffer[index * 4 + 3] = 0xFF;
     }
 
     fn sample_palette_ram(&self, palette: u8, index: u8) -> u8 {
