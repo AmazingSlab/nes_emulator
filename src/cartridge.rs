@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     is_bit_set,
-    mapper::{Mapper, Mapper0, Mapper4, Mirroring},
+    mapper::{Mapper, Mapper0, Mapper1, Mapper4, Mirroring},
     Bus,
 };
 
@@ -34,6 +34,7 @@ impl Cartridge {
 
         let mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new(prg_rom, chr_rom, prg_rom_blocks, mirror_flag)?),
+            1 => Box::new(Mapper1::new(prg_rom, chr_rom)?),
             4 => Box::new(Mapper4::new(prg_rom, chr_rom)?),
             id => return Err(format!("mapper {id} not implemented")),
         };
