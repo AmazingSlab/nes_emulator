@@ -1,4 +1,4 @@
-use nes_emulator::{Bus, Cartridge, Controller, Cpu, Ppu};
+use nes_emulator::{Bus, Cartridge, Controller, Cpu, Ppu, Replay};
 use sdl2::{
     event::Event,
     keyboard::{Keycode, Scancode},
@@ -19,6 +19,20 @@ const OAM_SCALE: u32 = 4;
 pub fn main() {
     let mut args = std::env::args();
     let rom_path = args.nth(1).expect("no rom path provided");
+    let replay_data = args
+        .next()
+        .map(|path| std::fs::read(path).expect("failed to read replay"))
+        .map(|data| String::from_utf8_lossy(&data).to_string())
+        .unwrap_or_default();
+
+    let mut replay = match replay_data.is_empty() {
+        true => None,
+        false => Some(
+            Replay::new(replay_data.lines())
+                .map_err(|err| format!("failed to parse replay: {err}"))
+                .unwrap(),
+        ),
+    };
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -196,7 +210,20 @@ pub fn main() {
             }
         }
 
-        let (controller_1, controller_2) = get_controller_state(&event_pump);
+        let (controller_1, controller_2) = match replay {
+            Some(ref mut replay) if run_emulation => match replay.next() {
+                None => Default::default(),
+                Some((command, controller_1, controller_2)) => {
+                    if command.soft_reset() {
+                        Bus::reset(cpu.clone(), ppu.clone());
+                    }
+                    (controller_1, controller_2)
+                }
+            },
+            Some(_) => Default::default(),
+            None => get_controller_state(&event_pump),
+        };
+
         bus.borrow_mut()
             .set_controller_state(controller_1, controller_2);
 
