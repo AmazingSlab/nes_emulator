@@ -3,6 +3,7 @@ mod cartridge;
 pub mod cpu;
 pub mod mapper;
 pub mod ppu;
+mod replay;
 
 #[cfg(feature = "wasm")]
 use std::{cell::RefCell, rc::Rc};
@@ -11,6 +12,7 @@ pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use cpu::Cpu;
 pub use ppu::Ppu;
+pub use replay::Replay;
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
