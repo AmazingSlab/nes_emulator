@@ -15,6 +15,7 @@ where
     new_ppu: Option<bool>,
     fds: Option<bool>,
     fourscore: bool,
+    microphone: Option<bool>,
     port_0: InputDevice,
     port_1: InputDevice,
     port_2: PortDevice,
@@ -24,6 +25,7 @@ where
     comment: Option<String>,
     guid: String,
     rom_checksum: String,
+    savestate: Option<String>,
     iter: Peekable<I>,
 }
 
@@ -60,6 +62,7 @@ where
                     "NewPPU" => builder.set_new_ppu(parse::<u8>(key, value)? != 0),
                     "FDS" => builder.set_fds(parse::<u8>(key, value)? != 0),
                     "fourscore" => builder.set_fourscore(parse::<u8>(key, value)? != 0),
+                    "microphone" => builder.set_microphone(parse::<u8>(key, value)? != 0),
                     "port0" => builder.set_port_0(parse::<u8>(key, value)?.try_into()?),
                     "port1" => builder.set_port_1(parse::<u8>(key, value)?.try_into()?),
                     "port2" => builder.set_port_2(parse::<u8>(key, value)?.try_into()?),
@@ -67,8 +70,12 @@ where
                     "length" => builder.set_length(parse(key, value)?),
                     "romFilename" => builder.set_rom_filename(value.to_string()),
                     "comment" => builder.set_comment(value.to_string()),
+                    // Multiple subtitle entries with different timings are possible and will
+                    // require special handling. Do nothing for now.
+                    "subtitle" => &mut builder,
                     "guid" => builder.set_guid(value.to_string()),
                     "romChecksum" => builder.set_rom_checksum(value.to_string()),
+                    "savestate" => builder.set_savestate(value.to_string()),
                     _ => return Err(format!("unrecognized key `{key}`")),
                 };
             }
@@ -88,8 +95,14 @@ where
         if replay.fourscore {
             return Err("fourscore not supported".into());
         }
+        if replay.microphone.unwrap_or_default() {
+            return Err("microphone not supported".into());
+        }
         if replay.binary.unwrap_or_default() {
             return Err("binary input log not supported".into());
+        }
+        if replay.savestate.is_some() {
+            return Err("savestates not supported".into());
         }
 
         Ok(replay)
@@ -156,6 +169,7 @@ struct ReplayBuilder {
     new_ppu: Option<bool>,
     fds: Option<bool>,
     fourscore: Option<bool>,
+    microphone: Option<bool>,
     port_0: Option<InputDevice>,
     port_1: Option<InputDevice>,
     port_2: Option<PortDevice>,
@@ -165,6 +179,7 @@ struct ReplayBuilder {
     comment: Option<String>,
     guid: Option<String>,
     rom_checksum: Option<String>,
+    savestate: Option<String>,
 }
 
 impl ReplayBuilder {
@@ -198,6 +213,10 @@ impl ReplayBuilder {
     }
     fn set_fourscore(&mut self, fourscore: bool) -> &mut Self {
         self.fourscore = Some(fourscore);
+        self
+    }
+    fn set_microphone(&mut self, microphone: bool) -> &mut Self {
+        self.microphone = Some(microphone);
         self
     }
     fn set_port_0(&mut self, port_0: InputDevice) -> &mut Self {
@@ -234,6 +253,10 @@ impl ReplayBuilder {
     }
     fn set_rom_checksum(&mut self, rom_checksum: String) -> &mut Self {
         self.rom_checksum = Some(rom_checksum);
+        self
+    }
+    fn set_savestate(&mut self, savestate: String) -> &mut Self {
+        self.savestate = Some(savestate);
         self
     }
 
@@ -279,6 +302,7 @@ impl ReplayBuilder {
             new_ppu: self.new_ppu,
             fds: self.fds,
             fourscore,
+            microphone: self.microphone,
             port_0,
             port_1,
             port_2,
@@ -288,6 +312,7 @@ impl ReplayBuilder {
             comment: self.comment,
             guid,
             rom_checksum,
+            savestate: self.savestate,
             iter,
         })
     }
