@@ -158,9 +158,7 @@ pub fn main() {
                 Event::KeyDown {
                     keycode: Some(Keycode::P),
                     ..
-                } => {
-                    run_emulation = !run_emulation;
-                }
+                } => run_emulation = !run_emulation,
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
@@ -179,9 +177,7 @@ pub fn main() {
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
                     ..
-                } => {
-                    Bus::reset(cpu.clone(), ppu.clone());
-                }
+                } => Bus::reset(cpu.clone(), ppu.clone()),
                 #[cfg(feature = "memview")]
                 Event::KeyDown {
                     keycode: Some(Keycode::E),
