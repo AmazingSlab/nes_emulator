@@ -162,18 +162,7 @@ pub fn main() {
                 Event::KeyDown {
                     keycode: Some(Keycode::Space),
                     ..
-                } => {
-                    while !ppu.borrow().is_frame_ready {
-                        Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
-                    }
-                    ppu.borrow_mut().is_frame_ready = false;
-                    #[cfg(feature = "memview")]
-                    {
-                        ppu.borrow_mut().draw_nametables();
-                        ppu.borrow_mut().draw_pattern_tables();
-                        ppu.borrow_mut().draw_oam();
-                    }
-                }
+                } => step_frame = true,
                 Event::KeyDown {
                     keycode: Some(Keycode::R),
                     ..
@@ -207,7 +196,7 @@ pub fn main() {
         }
 
         let (controller_1, controller_2) = match replay {
-            Some(ref mut replay) if run_emulation => match replay.next() {
+            Some(ref mut replay) if run_emulation || step_frame => match replay.next() {
                 None => Default::default(),
                 Some((command, controller_1, controller_2)) => {
                     if command.soft_reset() {
@@ -225,11 +214,12 @@ pub fn main() {
 
         let desired_delta = 1000 / FPS;
         let frame_start = timer_subsystem.ticks64();
-        if run_emulation {
+        if run_emulation || step_frame {
             while !ppu.borrow().is_frame_ready {
                 Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
             }
             ppu.borrow_mut().is_frame_ready = false;
+            step_frame = false;
             #[cfg(feature = "memview")]
             {
                 ppu.borrow_mut().draw_nametables();
