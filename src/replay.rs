@@ -384,6 +384,15 @@ pub struct InputCommand {
     pub disk_select: bool,
     #[bits(1)]
     pub insert_coin: bool,
-    #[bits(3)]
+    #[bits(2)]
     __: u8,
+    /// Internal extension used to take screenshots of test cases.
+    #[bits(1)]
+    pub screenshot: bool,
+}
+
+impl std::fmt::Display for InputCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }

@@ -1,4 +1,4 @@
-use nes_emulator::{Bus, Cartridge, Controller, Cpu, Ppu, Replay};
+use nes_emulator::{Bus, Cartridge, Controller, Cpu, InputCommand, Ppu, Replay};
 use sdl2::{
     event::Event,
     keyboard::{Keycode, Scancode},
@@ -130,6 +130,11 @@ pub fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let mut run_emulation = false;
+    let mut step_frame = false;
+
+    let mut record_replay = false;
+    let mut replay_screenshot = false;
+    let mut replay_recording: Vec<(InputCommand, Controller, Controller)> = Vec::new();
 
     // Controls:
     // ESC: Quit.
@@ -138,6 +143,8 @@ pub fn main() {
     // Space: Step forward one frame.
     // R: Reset.
     // Q/E: Cycle between pattern table palettes.
+    // V: Start/stop replay recording.
+    // B: Record screenshot.
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -191,6 +198,36 @@ pub fn main() {
                     }
                     ppu.borrow_mut().draw_pattern_tables();
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::V),
+                    ..
+                } => {
+                    if !record_replay {
+                        println!("replay recording started");
+                        record_replay = true;
+                    } else {
+                        // Determine whether controller 2 was used.
+                        let controller_2_active = replay_recording
+                            .iter()
+                            .any(|&(_, _, controller)| controller != Controller::default());
+
+                        for &(command, controller_1, controller_2) in &replay_recording {
+                            // Only emit controller 2 data if necessary.
+                            let controller_2 = if controller_2_active {
+                                controller_2.to_string()
+                            } else {
+                                "".to_string()
+                            };
+                            println!("|{command}|{controller_1}|{controller_2}||");
+                        }
+                        println!("replay recording finished");
+                        record_replay = false;
+                    }
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::B),
+                    ..
+                } => replay_screenshot = true,
                 _ => {}
             }
         }
@@ -206,7 +243,16 @@ pub fn main() {
                 }
             },
             Some(_) => Default::default(),
-            None => get_controller_state(&event_pump),
+            None => {
+                let (controller_1, controller_2) = get_controller_state(&event_pump);
+                if record_replay && (run_emulation || step_frame) {
+                    let command = InputCommand::new().with_screenshot(replay_screenshot);
+                    replay_recording.push((command, controller_1, controller_2));
+                    replay_screenshot = false;
+                }
+
+                (controller_1, controller_2)
+            }
         };
 
         bus.borrow_mut()

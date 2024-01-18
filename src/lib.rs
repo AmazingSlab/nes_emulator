@@ -12,7 +12,7 @@ pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use cpu::Cpu;
 pub use ppu::Ppu;
-pub use replay::Replay;
+pub use replay::{InputCommand, Replay};
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -98,6 +98,23 @@ pub struct Controller {
     pub down: bool,
     pub left: bool,
     pub right: bool,
+}
+
+impl std::fmt::Display for Controller {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let format_input = |input: bool, str: &'static str| if input { str } else { "." };
+
+        let right = format_input(self.right(), "R");
+        let left = format_input(self.left(), "L");
+        let down = format_input(self.down(), "D");
+        let up = format_input(self.up(), "U");
+        let start = format_input(self.start(), "T");
+        let select = format_input(self.select(), "S");
+        let b = format_input(self.b(), "B");
+        let a = format_input(self.a(), "A");
+
+        write!(f, "{right}{left}{down}{up}{start}{select}{b}{a}")
+    }
 }
 
 #[cfg(feature = "wasm")]
