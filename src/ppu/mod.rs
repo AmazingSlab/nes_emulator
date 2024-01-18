@@ -609,6 +609,7 @@ impl Ppu {
                         }
                     }
                     Mirroring::Vertical => self.nametables[addr as usize & 0x07FF],
+                    Mirroring::SingleScreen => self.nametables[addr as usize & 0x03FF],
                 }
             }
             // Palette RAM.
@@ -647,6 +648,7 @@ impl Ppu {
                         }
                     }
                     Mirroring::Vertical => self.nametables[addr as usize & 0x07FF] = data,
+                    Mirroring::SingleScreen => self.nametables[addr as usize & 0x03FF] = data,
                 }
             }
             // Palette RAM.
