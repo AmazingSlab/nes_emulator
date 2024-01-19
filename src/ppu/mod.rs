@@ -314,7 +314,9 @@ impl Ppu {
             if self.cycle == 257 {
                 for sprite in 0..64 {
                     let y_pos = self.oam[sprite * 4];
-                    if self.scanline.wrapping_sub(y_pos as u16) < 16 {
+                    if self.scanline.wrapping_sub(y_pos as u16)
+                        < (self.control.sprite_size() as u16 + 1) * 8
+                    {
                         for i in 0..4 {
                             self.secondary_oam[self.secondary_oam_sprite_count as usize * 4 + i] =
                                 self.oam[sprite * 4 + i];
