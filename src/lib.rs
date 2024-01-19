@@ -86,8 +86,8 @@ pub const fn high_byte(word: u16) -> u8 {
     (word >> 8) as u8
 }
 
-#[cfg(not(feature = "wasm"))]
 #[bitfield_struct::bitfield(u8)]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[derive(PartialEq, Eq)]
 pub struct Controller {
     pub a: bool,
@@ -98,6 +98,15 @@ pub struct Controller {
     pub down: bool,
     pub left: bool,
     pub right: bool,
+}
+
+#[cfg(feature = "wasm")]
+#[wasm_bindgen]
+impl Controller {
+    // Necessary because the From<u8> trait implementation is inaccessible from Wasm.
+    pub fn from_u8(value: u8) -> Self {
+        Self(value)
+    }
 }
 
 impl std::fmt::Display for Controller {
@@ -114,18 +123,5 @@ impl std::fmt::Display for Controller {
         let a = format_input(self.a(), "A");
 
         write!(f, "{right}{left}{down}{up}{start}{select}{b}{a}")
-    }
-}
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-#[derive(Default, Clone, Copy)]
-pub struct Controller(u8);
-
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-impl Controller {
-    pub fn new(state: u8) -> Self {
-        Self(state)
     }
 }
