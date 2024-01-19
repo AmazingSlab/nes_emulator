@@ -418,6 +418,17 @@ impl Ppu {
         let sprite_pattern = sprite_pattern;
         let sprite_palette = sprite_palette;
 
+        let background_pattern = if !self.mask.show_left_background_tiles() && self.cycle < 9 {
+            0
+        } else {
+            background_pattern
+        };
+        let sprite_pattern = if !self.mask.show_left_sprite_tiles() && self.cycle < 9 {
+            0
+        } else {
+            sprite_pattern
+        };
+
         let mut color_index = 0;
         if background_pattern == 0 && sprite_pattern != 0 {
             color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
