@@ -311,7 +311,7 @@ impl Ppu {
             if self.cycle == 257 {
                 for sprite in 0..64 {
                     let y_pos = self.oam[sprite * 4];
-                    if self.scanline.wrapping_sub(y_pos as u16) < 8 {
+                    if self.scanline.wrapping_sub(y_pos as u16) < 16 {
                         for i in 0..4 {
                             self.secondary_oam[self.secondary_oam_sprite_count as usize * 4 + i] =
                                 self.oam[sprite * 4 + i];
@@ -331,19 +331,45 @@ impl Ppu {
                     let attrib = self.secondary_oam[i * 4 + 2];
                     let flip_horizontally = attrib & (1 << 6) != 0;
                     let flip_vertically = attrib & (1 << 7) != 0;
-                    let line = (self.scanline.wrapping_sub(y_pos as u16)) & 0x07;
-                    let line = if flip_vertically { 7 - line } else { line };
-                    let pattern_low = self.ppu_read(
-                        ((self.control.sprite_pattern() as u16) << 12)
-                            | ((index as u16) << 4)
-                            | line,
-                    );
-                    let pattern_high = self.ppu_read(
-                        ((self.control.sprite_pattern() as u16) << 12)
-                            | ((index as u16) << 4)
-                            | 8
-                            | line,
-                    );
+                    let line = (self.scanline.wrapping_sub(y_pos as u16)) & 0x0F;
+
+                    let pattern_low;
+                    let pattern_high;
+                    if self.control.sprite_size() == 0 {
+                        let line = if flip_vertically { 7 - line } else { line };
+                        pattern_low = self.ppu_read(
+                            ((self.control.sprite_pattern() as u16) << 12)
+                                | ((index as u16) << 4)
+                                | line,
+                        );
+                        pattern_high = self.ppu_read(
+                            ((self.control.sprite_pattern() as u16) << 12)
+                                | ((index as u16) << 4)
+                                | 8
+                                | line,
+                        );
+                    } else if (line < 8 && !flip_vertically) || (flip_vertically && line > 7) {
+                        let line = line & 0x07;
+                        let line = if flip_vertically { 7 - line } else { line };
+                        pattern_low = self.ppu_read(
+                            ((index as u16 & 1) << 12) | ((index as u16 & 0xFE) << 4) | line,
+                        );
+                        pattern_high = self.ppu_read(
+                            ((index as u16 & 1) << 12) | ((index as u16 & 0xFE) << 4) | 8 | line,
+                        );
+                    } else {
+                        let line = line & 0x07;
+                        let line = if flip_vertically { 7 - line } else { line };
+                        pattern_low = self.ppu_read(
+                            ((index as u16 & 1) << 12) | (((index as u16 & 0xFE) + 1) << 4) | line,
+                        );
+                        pattern_high = self.ppu_read(
+                            ((index as u16 & 1) << 12)
+                                | (((index as u16 & 0xFE) + 1) << 4)
+                                | 8
+                                | line,
+                        );
+                    }
                     let (pattern_low, pattern_high) = if flip_horizontally {
                         (pattern_low.reverse_bits(), pattern_high.reverse_bits())
                     } else {
