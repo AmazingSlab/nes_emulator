@@ -124,7 +124,7 @@ impl Mapper for Mapper4 {
                         self.mirroring = Mirroring::Horizontal;
                     }
                 } else {
-                    println!("prg ram protect");
+                    // PRG RAM protect.
                 }
             }
             0xC000..=0xDFFF => {
