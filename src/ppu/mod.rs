@@ -430,7 +430,7 @@ impl Ppu {
             } else {
                 color_index = self.sample_palette_ram(background_palette, background_index);
             }
-        } else if background_index == 0 && sprite_palette == 0 {
+        } else if background_index == 0 && sprite_pattern == 0 {
             color_index = self.sample_palette_ram(0, 0);
         }
 
