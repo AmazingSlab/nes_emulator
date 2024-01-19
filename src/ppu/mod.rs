@@ -336,6 +336,7 @@ impl Ppu {
                     let pattern_low;
                     let pattern_high;
                     if self.control.sprite_size() == 0 {
+                        let line = line & 0x07;
                         let line = if flip_vertically { 7 - line } else { line };
                         pattern_low = self.ppu_read(
                             ((self.control.sprite_pattern() as u16) << 12)
