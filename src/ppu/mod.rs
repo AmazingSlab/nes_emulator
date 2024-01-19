@@ -329,7 +329,7 @@ impl Ppu {
                 }
             }
             if self.cycle == 320 {
-                for i in 0..8 {
+                for i in 0..self.secondary_oam_sprite_count as usize {
                     self.sprite_x_pos[i] = self.secondary_oam[i * 4 + 3];
                     let y_pos = self.secondary_oam[i * 4];
                     let index = self.secondary_oam[i * 4 + 1];
