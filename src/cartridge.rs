@@ -68,4 +68,11 @@ impl Cartridge {
     pub fn mirroring(&self) -> Mirroring {
         self.mapper.mirroring()
     }
+
+    pub fn count_scanline(&mut self) {
+        self.mapper.count_scanline();
+        if self.mapper.check_irq() {
+            self.bus.upgrade().unwrap().borrow_mut().request_irq();
+        }
+    }
 }

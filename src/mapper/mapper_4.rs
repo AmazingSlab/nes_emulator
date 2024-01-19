@@ -7,8 +7,10 @@ pub struct Mapper4 {
     bank_register: [u8; 8],
     bank_select: BankSelect,
     irq_latch: u8,
-    _irq_counter: u8,
+    irq_counter: u8,
+    irq_reload: bool,
     is_irq_enabled: bool,
+    emit_irq: bool,
     mirroring: Mirroring,
 
     prg_banks: u8,
@@ -23,8 +25,10 @@ impl Mapper4 {
             bank_register: [0; 8],
             bank_select: BankSelect::default(),
             irq_latch: 0,
-            _irq_counter: 0,
+            irq_counter: 0,
+            irq_reload: false,
             is_irq_enabled: false,
+            emit_irq: false,
             mirroring: Mirroring::Vertical,
 
             prg_banks: (prg_rom.len() / (8 * 1024)) as u8,
@@ -127,16 +131,11 @@ impl Mapper for Mapper4 {
                 if addr & 1 == 0 {
                     self.irq_latch = data;
                 } else {
-                    // TODO: IRQ reload.
+                    self.irq_reload = true;
                 }
             }
             0xE000..=0xFFFF => {
-                if addr & 1 == 0 {
-                    self.is_irq_enabled = false;
-                    // TODO: Acknowledge interrupts.
-                } else {
-                    self.is_irq_enabled = true;
-                }
+                self.is_irq_enabled = addr & 1 != 0;
             }
             _ => (),
         }
@@ -155,6 +154,24 @@ impl Mapper for Mapper4 {
 
     fn mirroring(&self) -> Mirroring {
         self.mirroring
+    }
+
+    fn check_irq(&self) -> bool {
+        self.emit_irq
+    }
+
+    fn count_scanline(&mut self) {
+        self.emit_irq = false;
+
+        if self.irq_counter == 0 || self.irq_reload {
+            self.irq_counter = self.irq_latch;
+            self.irq_reload = false;
+        } else {
+            self.irq_counter -= 1;
+        }
+        if self.irq_counter == 0 && self.is_irq_enabled {
+            self.emit_irq = true;
+        }
     }
 }
 

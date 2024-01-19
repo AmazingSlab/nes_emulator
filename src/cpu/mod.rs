@@ -59,6 +59,24 @@ impl Cpu {
         self.cycle_wait = 8;
     }
 
+    pub fn irq(&mut self) {
+        if self.status.intersects(Status::I) {
+            return;
+        }
+
+        let pc_high = high_byte(self.program_counter);
+        let pc_low = low_byte(self.program_counter);
+
+        self.push(pc_high);
+        self.push(pc_low);
+        self.push(self.status.bits());
+
+        // Jump to the address stored at the IRQ vector (0xFFFE-0xFFFF).
+        self.program_counter = self.read_u16_absolute(0xFFFE);
+
+        self.cycle_wait = 8;
+    }
+
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
     }

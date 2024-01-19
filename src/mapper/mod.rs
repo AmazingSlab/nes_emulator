@@ -12,6 +12,10 @@ pub trait Mapper {
     fn ppu_read(&self, addr: u16) -> u8;
     fn ppu_write(&mut self, addr: u16, data: u8);
     fn mirroring(&self) -> Mirroring;
+    fn check_irq(&self) -> bool {
+        false
+    }
+    fn count_scanline(&mut self) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

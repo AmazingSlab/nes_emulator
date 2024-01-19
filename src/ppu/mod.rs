@@ -271,6 +271,9 @@ impl Ppu {
                 self.load_shift_registers();
                 self.update_x_scroll();
             }
+            if self.cycle == 260 && (self.mask.show_background() || self.mask.show_sprites()) {
+                self.cartridge.borrow_mut().count_scanline();
+            }
             if self.cycle == 338 || self.cycle == 340 {
                 self.next_tile_nametable = self.ppu_read(0x2000 | self.vram_addr.0 & 0x0FFF);
             }

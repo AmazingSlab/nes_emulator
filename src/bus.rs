@@ -17,6 +17,7 @@ pub struct Bus {
     is_dma_active: bool,
     dma_dummy: bool,
     dma_data: u8,
+    emit_irq: bool,
 }
 
 impl Bus {
@@ -41,6 +42,7 @@ impl Bus {
             is_dma_active: false,
             dma_dummy: true,
             dma_data: 0,
+            emit_irq: false,
         };
 
         Rc::new_cyclic(|rc| {
@@ -49,6 +51,10 @@ impl Bus {
             bus.cartridge.borrow_mut().connect_bus(rc.clone());
             RefCell::new(bus)
         })
+    }
+
+    pub fn request_irq(&mut self) {
+        self.emit_irq = true;
     }
 
     pub fn set_controller_state(
@@ -142,6 +148,7 @@ impl Bus {
                 ppu.borrow_mut().cpu_write(0x04, bus.borrow().dma_data);
                 if ppu.borrow().oam_addr == 0 {
                     bus.borrow_mut().is_dma_active = false;
+                    bus.borrow_mut().dma_dummy = true;
                 }
             }
         }
@@ -151,6 +158,10 @@ impl Bus {
         if !bus.borrow().is_dma_active && ppu.borrow().emit_nmi {
             cpu.borrow_mut().nmi();
             ppu.borrow_mut().emit_nmi = false;
+        }
+        if !bus.borrow().is_dma_active && bus.borrow().emit_irq {
+            cpu.borrow_mut().irq();
+            bus.borrow_mut().emit_irq = false;
         }
         bus.borrow_mut().cycle += 1;
     }
