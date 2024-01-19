@@ -329,7 +329,8 @@ impl Ppu {
                 }
             }
             if self.cycle == 320 {
-                for i in 0..8 {
+                for i in 0..self.secondary_oam_sprite_count {
+                    let i = i as usize;
                     self.sprite_x_pos[i] = self.secondary_oam[i * 4 + 3];
                     let y_pos = self.secondary_oam[i * 4];
                     let index = self.secondary_oam[i * 4 + 1];
@@ -384,6 +385,11 @@ impl Ppu {
                     self.sprite_pattern_shift_low[i] = pattern_low;
                     self.sprite_pattern_shift_high[i] = pattern_high;
                     self.sprite_attrib[i] = attrib;
+                }
+                for i in self.secondary_oam_sprite_count..8 {
+                    let i = i as usize;
+                    self.sprite_pattern_shift_low[i] = 0;
+                    self.sprite_pattern_shift_high[i] = 0;
                 }
             }
         }
