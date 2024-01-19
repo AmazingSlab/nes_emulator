@@ -395,7 +395,7 @@ impl Ppu {
         let background_attrib_high = ((self.palette_attrib_shift_high & bit_mux) > 0) as u8;
 
         let background_palette = (background_attrib_high << 1) | background_attrib_low;
-        let background_index = (background_pattern_high << 1) | background_pattern_low;
+        let background_pattern = (background_pattern_high << 1) | background_pattern_low;
 
         let mut sprite_pattern = 0;
         let mut sprite_palette = 0;
@@ -419,18 +419,18 @@ impl Ppu {
         let sprite_palette = sprite_palette;
 
         let mut color_index = 0;
-        if background_index == 0 && sprite_pattern != 0 {
+        if background_pattern == 0 && sprite_pattern != 0 {
             color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
-        } else if background_index != 0 && sprite_pattern == 0 {
-            color_index = self.sample_palette_ram(background_palette, background_index);
-        } else if background_index != 0 && sprite_pattern != 0 {
+        } else if background_pattern != 0 && sprite_pattern == 0 {
+            color_index = self.sample_palette_ram(background_palette, background_pattern);
+        } else if background_pattern != 0 && sprite_pattern != 0 {
             self.status.set_sprite_zero_hit(true);
             if sprite_attrib & (1 << 5) == 0 {
                 color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
             } else {
-                color_index = self.sample_palette_ram(background_palette, background_index);
+                color_index = self.sample_palette_ram(background_palette, background_pattern);
             }
-        } else if background_index == 0 && sprite_pattern == 0 {
+        } else if background_pattern == 0 && sprite_pattern == 0 {
             color_index = self.sample_palette_ram(0, 0);
         }
 
