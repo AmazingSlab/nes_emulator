@@ -1,3 +1,4 @@
+mod apu;
 mod bus;
 mod cartridge;
 pub mod cpu;
@@ -8,6 +9,7 @@ mod replay;
 #[cfg(feature = "wasm")]
 use std::{cell::RefCell, rc::Rc};
 
+pub use apu::Apu;
 pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use cpu::Cpu;
@@ -38,7 +40,8 @@ impl Nes {
         let cartridge = Rc::new(RefCell::new(Cartridge::new(rom)?));
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
-        let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), cartridge);
+        let apu = Rc::new(RefCell::new(Apu::new()));
+        let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), apu, cartridge);
         cpu.borrow_mut().reset();
 
         Ok(Self { bus, cpu, ppu })

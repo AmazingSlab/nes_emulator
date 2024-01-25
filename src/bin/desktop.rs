@@ -1,5 +1,6 @@
-use nes_emulator::{Bus, Cartridge, Controller, Cpu, InputCommand, Ppu, Replay};
+use nes_emulator::{Apu, Bus, Cartridge, Controller, Cpu, InputCommand, Ppu, Replay};
 use sdl2::{
+    audio::AudioSpecDesired,
     event::Event,
     keyboard::{Keycode, Scancode},
     pixels::PixelFormatEnum,
@@ -36,7 +37,7 @@ pub fn main() {
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
-    let timer_subsystem = sdl_context.timer().unwrap();
+    let audio_subsystem = sdl_context.audio().unwrap();
 
     let window = video_subsystem
         .window("NES Emulator", 256 * MAIN_SCALE, 240 * MAIN_SCALE)
@@ -121,11 +122,22 @@ pub fn main() {
         .create_texture_streaming(PixelFormatEnum::RGB24, 64, 64)
         .unwrap();
 
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),
+        samples: None,
+    };
+    let device = audio_subsystem
+        .open_queue::<i16, _>(None, &desired_spec)
+        .unwrap();
+    device.resume();
+
     let rom = std::fs::read(rom_path).expect("failed to read rom");
     let cartridge = Rc::new(RefCell::new(Cartridge::new(&rom).unwrap()));
     let cpu = Rc::new(RefCell::new(Cpu::new()));
     let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
-    let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), cartridge);
+    let apu = Rc::new(RefCell::new(Apu::new()));
+    let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), apu.clone(), cartridge);
     cpu.borrow_mut().reset();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -158,7 +170,7 @@ pub fn main() {
                     ..
                 } => {
                     while !cpu.borrow().is_instruction_finished {
-                        Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
+                        Bus::clock(bus.clone(), cpu.clone(), ppu.clone(), apu.clone());
                     }
                     cpu.borrow_mut().is_instruction_finished = false;
                 }
@@ -258,14 +270,15 @@ pub fn main() {
         bus.borrow_mut()
             .set_controller_state(controller_1, controller_2);
 
-        let desired_delta = 1000 / FPS;
-        let frame_start = timer_subsystem.ticks64();
-        if run_emulation || step_frame {
+        if (run_emulation && device.size() < 4096) || step_frame {
             while !ppu.borrow().is_frame_ready {
-                Bus::clock(bus.clone(), cpu.clone(), ppu.clone());
+                Bus::clock(bus.clone(), cpu.clone(), ppu.clone(), apu.clone());
             }
             ppu.borrow_mut().is_frame_ready = false;
             step_frame = false;
+            device
+                .queue_audio(&apu.borrow_mut().drain_audio_buffer())
+                .unwrap();
             #[cfg(feature = "memview")]
             {
                 ppu.borrow_mut().draw_nametables();
@@ -273,10 +286,8 @@ pub fn main() {
                 ppu.borrow_mut().draw_oam();
             }
         }
-        let frame_end = timer_subsystem.ticks64();
-        let delta = frame_end - frame_start;
-        if delta < desired_delta {
-            std::thread::sleep(Duration::from_millis(desired_delta - delta));
+        if device.size() > 4096 || !run_emulation {
+            std::thread::sleep(Duration::from_millis(1000 / FPS));
         }
 
         texture

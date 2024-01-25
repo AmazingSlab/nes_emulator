@@ -1,11 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{concat_bytes, Cartridge, Controller, Cpu, Ppu};
+use crate::{concat_bytes, Apu, Cartridge, Controller, Cpu, Ppu};
 
 pub struct Bus {
     cpu: Rc<RefCell<Cpu>>,
     ram: [u8; 2048],
     ppu: Rc<RefCell<Ppu>>,
+    apu: Rc<RefCell<Apu>>,
     cartridge: Rc<RefCell<Cartridge>>,
     controller_1: Controller,
     controller_1_state: Controller,
@@ -25,12 +26,14 @@ impl Bus {
         cpu: Rc<RefCell<Cpu>>,
         ram: [u8; 2048],
         ppu: Rc<RefCell<Ppu>>,
+        apu: Rc<RefCell<Apu>>,
         cartridge: Rc<RefCell<Cartridge>>,
     ) -> Rc<RefCell<Self>> {
         let bus = Self {
             cpu,
             ram,
             ppu,
+            apu,
             cartridge,
             controller_1: Controller::default(),
             controller_1_state: Controller::default(),
@@ -70,6 +73,7 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF],
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_read(addr & 0x07),
+            0x4000..=0x4013 | 0x4015 => self.apu.borrow().cpu_read(addr),
             0x4014 => self.ppu.borrow_mut().cpu_read(addr),
             0x4016 => {
                 if self.controller_strobe {
@@ -96,6 +100,7 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF] = data,
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_write(addr & 0x07, data),
+            0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.borrow_mut().cpu_write(addr, data),
             0x4014 => {
                 self.ppu.borrow_mut().cpu_write(addr, data);
                 self.is_dma_active = true;
@@ -130,7 +135,12 @@ impl Bus {
     /// This is an associated function instead of a method due to how the CPU and PPU need mutable
     /// access to the bus, which means borrowing the bus RefCell to call this function would always
     /// be invalid.
-    pub fn clock(bus: Rc<RefCell<Bus>>, cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {
+    pub fn clock(
+        bus: Rc<RefCell<Bus>>,
+        cpu: Rc<RefCell<Cpu>>,
+        ppu: Rc<RefCell<Ppu>>,
+        apu: Rc<RefCell<Apu>>,
+    ) {
         if !bus.borrow().is_dma_active {
             cpu.borrow_mut().clock();
         } else if bus.borrow().dma_dummy {
@@ -151,6 +161,9 @@ impl Bus {
                     bus.borrow_mut().dma_dummy = true;
                 }
             }
+        }
+        if bus.borrow().cycle & 1 != 0 {
+            apu.borrow_mut().clock();
         }
         for _ in 0..3 {
             ppu.borrow_mut().clock();
