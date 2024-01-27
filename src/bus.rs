@@ -162,9 +162,7 @@ impl Bus {
                 }
             }
         }
-        if bus.borrow().cycle & 1 != 0 {
-            apu.borrow_mut().clock();
-        }
+        apu.borrow_mut().clock();
         for _ in 0..3 {
             ppu.borrow_mut().clock();
         }
