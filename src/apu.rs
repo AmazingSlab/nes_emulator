@@ -10,6 +10,7 @@ pub struct Apu {
 
     pulse_1: PulseChannel,
     pulse_2: PulseChannel,
+    triangle: TriangleChannel,
 
     clock_timer: usize,
 }
@@ -44,20 +45,23 @@ impl Apu {
         if is_quarter_frame {
             self.pulse_1.clock_envelope();
             self.pulse_2.clock_envelope();
+            self.triangle.clock_linear_counter();
         }
         if is_half_frame {
             self.pulse_1.clock_length_counter();
             self.pulse_2.clock_length_counter();
+            self.triangle.clock_length_counter();
         }
 
         if self.clock_timer % 2 == 0 {
             self.pulse_1.clock();
             self.pulse_2.clock();
         }
+        self.triangle.clock();
 
         if self.clock_timer % 40 == 0 {
             self.audio_buffer
-                .push(self.pulse_1.output() + self.pulse_2.output());
+                .push(self.pulse_1.output() + self.pulse_2.output() + self.triangle.output);
         }
         self.clock_timer += 1;
         if self.clock_timer == 14915 * 2 {
@@ -120,9 +124,23 @@ impl Apu {
                 self.pulse_2.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
                 self.pulse_2.envelope.start_flag = true;
             }
+            0x4008 => {
+                self.triangle.length_counter_halt = (data >> 7) & 0x01 != 0;
+                self.triangle.linear_counter_reload = data & 0x7F;
+            }
+            0x400A => self.triangle.timer_reload = data as u16,
+            0x400B => {
+                self.triangle.timer_reload =
+                    (self.triangle.timer_reload & 0x00FF) | ((data as u16 & 0x07) << 8);
+                self.triangle.timer = self.triangle.timer_reload;
+                self.triangle.length_counter =
+                    LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize] + 1;
+                self.triangle.linear_counter_reload_flag = true;
+            }
             0x4015 => {
                 self.pulse_1.is_enabled = data & 0x01 != 0;
                 self.pulse_2.is_enabled = data & 0x02 != 0;
+                self.triangle.is_enabled = data & 0x04 != 0;
             }
             _ => (),
         }
@@ -202,6 +220,69 @@ impl PulseChannel {
 impl Default for PulseChannel {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Default)]
+struct TriangleChannel {
+    is_enabled: bool,
+    length_counter_halt: bool,
+    timer: u16,
+    timer_reload: u16,
+    sequence_counter: u8,
+    length_counter: u8,
+    linear_counter: u8,
+    linear_counter_reload: u8,
+    linear_counter_reload_flag: bool,
+    output: i16,
+}
+
+impl TriangleChannel {
+    pub fn clock(&mut self) {
+        if !self.is_enabled {
+            self.length_counter = 0;
+        }
+        self.timer = self.timer.wrapping_sub(1) & 0x07FF;
+        if self.timer == 0x07FF {
+            let sample = if self.sequence_counter > 15 {
+                let value = (self.sequence_counter - 16) as i16 - 8;
+                (value as f32 / 15.0) * 2000.0
+            } else {
+                let value = (15 - self.sequence_counter) as i16 - 8;
+                (value as f32 / 15.0) * 2000.0
+            } as i16;
+            // Prevent ultrasonic frequencies from being played.
+            let sample = if self.timer_reload > 2 { sample } else { 0 };
+            self.output = sample;
+            if self.linear_counter > 0 && self.length_counter > 0 {
+                if self.sequence_counter < 31 {
+                    self.sequence_counter += 1;
+                } else {
+                    self.sequence_counter = 0;
+                }
+            }
+            self.timer = self.timer_reload + 1;
+        }
+        if self.length_counter == 0 {
+            self.output = 0;
+        }
+    }
+
+    pub fn clock_length_counter(&mut self) {
+        if self.length_counter > 0 && !self.length_counter_halt {
+            self.length_counter -= 1;
+        }
+    }
+
+    pub fn clock_linear_counter(&mut self) {
+        if self.linear_counter_reload_flag {
+            self.linear_counter = self.linear_counter_reload;
+        } else if self.linear_counter > 0 {
+            self.linear_counter -= 1;
+        }
+        if !self.length_counter_halt {
+            self.linear_counter_reload_flag = false;
+        }
     }
 }
 
