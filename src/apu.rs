@@ -59,7 +59,7 @@ impl Apu {
         }
         self.triangle.clock();
 
-        if self.clock_timer % 40 == 0 {
+        if self.clock_timer % 41 == 0 {
             self.audio_buffer
                 .push(self.pulse_1.output() + self.pulse_2.output() + self.triangle.output);
         }
