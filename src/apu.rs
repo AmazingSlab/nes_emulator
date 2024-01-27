@@ -3,6 +3,9 @@ const LENGTH_COUNTER_MAP: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
     192, 24, 72, 26, 16, 28, 32, 30,
 ];
+const NOISE_TIMER_MAP: [u16; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
+];
 
 #[derive(Default)]
 pub struct Apu {
@@ -11,6 +14,7 @@ pub struct Apu {
     pulse_1: PulseChannel,
     pulse_2: PulseChannel,
     triangle: TriangleChannel,
+    noise: NoiseChannel,
 
     clock_timer: usize,
 }
@@ -46,11 +50,13 @@ impl Apu {
             self.pulse_1.clock_envelope();
             self.pulse_2.clock_envelope();
             self.triangle.clock_linear_counter();
+            self.noise.clock_envelope();
         }
         if is_half_frame {
             self.pulse_1.clock_length_counter();
             self.pulse_2.clock_length_counter();
             self.triangle.clock_length_counter();
+            self.noise.clock_length_counter();
         }
 
         if self.clock_timer % 2 == 0 {
@@ -58,10 +64,15 @@ impl Apu {
             self.pulse_2.clock();
         }
         self.triangle.clock();
+        self.noise.clock();
 
         if self.clock_timer % 41 == 0 {
-            self.audio_buffer
-                .push(self.pulse_1.output() + self.pulse_2.output() + self.triangle.output);
+            self.audio_buffer.push(
+                self.pulse_1.output()
+                    + self.pulse_2.output()
+                    + self.triangle.output
+                    + self.noise.output(),
+            );
         }
         self.clock_timer += 1;
         if self.clock_timer == 14915 * 2 {
@@ -137,10 +148,26 @@ impl Apu {
                     LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize] + 1;
                 self.triangle.linear_counter_reload_flag = true;
             }
+            0x400C => {
+                self.noise.length_counter_halt = (data >> 5) & 0x01 != 0;
+                self.noise.envelope.divider_reload = data & 0x0F;
+                self.noise.envelope.divider = self.noise.envelope.divider_reload;
+                self.noise.envelope.constant_volume_flag = (data >> 4) & 0x01 != 0;
+            }
+            0x400E => {
+                self.noise.timer_reload = NOISE_TIMER_MAP[(data & 0x0F) as usize];
+                self.noise.timer = self.noise.timer_reload;
+                self.noise.mode_flag = (data >> 7) & 0x01 != 0;
+            }
+            0x400F => {
+                self.noise.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
+                self.noise.envelope.start_flag = true;
+            }
             0x4015 => {
                 self.pulse_1.is_enabled = data & 0x01 != 0;
                 self.pulse_2.is_enabled = data & 0x02 != 0;
                 self.triangle.is_enabled = data & 0x04 != 0;
+                self.noise.is_enabled = data & 0x08 != 0;
             }
             _ => (),
         }
@@ -283,6 +310,82 @@ impl TriangleChannel {
         if !self.length_counter_halt {
             self.linear_counter_reload_flag = false;
         }
+    }
+}
+
+struct NoiseChannel {
+    envelope: Envelope,
+
+    is_enabled: bool,
+    length_counter_halt: bool,
+    timer: u16,
+    timer_reload: u16,
+    length_counter: u8,
+    mode_flag: bool,
+    shift_register: u16,
+    output: i16,
+}
+
+impl NoiseChannel {
+    pub fn new() -> Self {
+        Self {
+            envelope: Envelope::new(),
+            is_enabled: false,
+            length_counter_halt: false,
+            timer: 0,
+            timer_reload: 0,
+            length_counter: 0,
+            mode_flag: false,
+            shift_register: 0b000000000000001,
+            output: 0,
+        }
+    }
+
+    pub fn clock(&mut self) {
+        if !self.is_enabled {
+            self.length_counter = 0;
+        }
+        self.timer = self.timer.wrapping_sub(1);
+        if self.timer == 0xFFFF {
+            let sample = if self.shift_register & 0x01 != 0 {
+                0
+            } else {
+                1000
+            };
+            self.output = sample;
+            let feedback = (self.shift_register & 0x01)
+                ^ if self.mode_flag {
+                    (self.shift_register >> 6) & 0x01
+                } else {
+                    (self.shift_register >> 1) & 0x01
+                };
+            self.shift_register >>= 1;
+            self.shift_register |= feedback << 14;
+            self.timer = self.timer_reload + 1;
+        }
+        if self.length_counter == 0 {
+            self.output = 0;
+        }
+    }
+
+    pub fn clock_length_counter(&mut self) {
+        if self.length_counter > 0 && !self.length_counter_halt {
+            self.length_counter -= 1;
+        }
+    }
+
+    pub fn clock_envelope(&mut self) {
+        self.envelope.clock(self.length_counter_halt);
+    }
+
+    pub fn output(&self) -> i16 {
+        (self.output as f32 * (self.envelope.output_volume as f32 / 15.0)) as i16
+    }
+}
+
+impl Default for NoiseChannel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
