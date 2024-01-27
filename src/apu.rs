@@ -23,26 +23,31 @@ impl Apu {
     }
 
     pub fn clock(&mut self) {
+        let mut is_quarter_frame = false;
+        let mut is_half_frame = false;
         if self.clock_timer == 3728 * 2 + 1 {
-            self.pulse_1.envelope_clock();
-            self.pulse_2.envelope_clock();
+            is_quarter_frame = true;
         } else if self.clock_timer == 7456 * 2 + 1 {
-            self.pulse_1.length_clock();
-            self.pulse_2.length_clock();
-            self.pulse_1.envelope_clock();
-            self.pulse_2.envelope_clock();
+            is_quarter_frame = true;
+            is_half_frame = true;
         } else if self.clock_timer == 11185 * 2 + 1 {
-            self.pulse_1.envelope_clock();
-            self.pulse_2.envelope_clock();
+            is_quarter_frame = true;
         } else if self.clock_timer == 14914 * 2 {
             // Quarter frame.
         } else if self.clock_timer == 14914 * 2 + 1 {
-            self.pulse_1.length_clock();
-            self.pulse_2.length_clock();
-            self.pulse_1.envelope_clock();
-            self.pulse_2.envelope_clock();
+            is_quarter_frame = true;
+            is_half_frame = true;
         } else if self.clock_timer == 14915 * 2 {
             // Quarter frame.
+        }
+
+        if is_quarter_frame {
+            self.pulse_1.clock_envelope();
+            self.pulse_2.clock_envelope();
+        }
+        if is_half_frame {
+            self.pulse_1.clock_length_counter();
+            self.pulse_2.clock_length_counter();
         }
 
         if self.clock_timer % 2 == 0 {
@@ -51,17 +56,8 @@ impl Apu {
         }
 
         if self.clock_timer % 40 == 0 {
-            let pulse_1_out = if self.pulse_1.constant_volume_flag {
-                (self.pulse_1.output as f32 * (self.pulse_1.envelope_reload as f32 / 15.0)) as i16
-            } else {
-                (self.pulse_1.output as f32 * (self.pulse_1.decay_level as f32 / 15.0)) as i16
-            };
-            let pulse_2_out = if self.pulse_2.constant_volume_flag {
-                (self.pulse_2.output as f32 * (self.pulse_2.envelope_reload as f32 / 15.0)) as i16
-            } else {
-                (self.pulse_2.output as f32 * (self.pulse_2.decay_level as f32 / 15.0)) as i16
-            };
-            self.audio_buffer.push(pulse_1_out + pulse_2_out);
+            self.audio_buffer
+                .push(self.pulse_1.output() + self.pulse_2.output());
         }
         self.clock_timer += 1;
         if self.clock_timer == 14915 * 2 {
@@ -91,9 +87,9 @@ impl Apu {
                     _ => unreachable!(),
                 };
                 self.pulse_1.length_counter_halt = (data >> 5) & 0x01 != 0;
-                self.pulse_1.envelope_reload = data & 0x0F;
-                self.pulse_1.envelope = self.pulse_1.envelope_reload;
-                self.pulse_1.constant_volume_flag = (data >> 4) & 0x01 != 0;
+                self.pulse_1.envelope.divider_reload = data & 0x0F;
+                self.pulse_1.envelope.divider = self.pulse_1.envelope.divider_reload;
+                self.pulse_1.envelope.constant_volume_flag = (data >> 4) & 0x01 != 0;
             }
             0x4002 => self.pulse_1.timer_reload = data as u16,
             0x4003 => {
@@ -101,7 +97,7 @@ impl Apu {
                     (self.pulse_1.timer_reload & 0x00FF) | ((data as u16 & 0x07) << 8);
                 self.pulse_1.timer = self.pulse_1.timer_reload;
                 self.pulse_1.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
-                self.pulse_1.envelope_start_flag = true;
+                self.pulse_1.envelope.start_flag = true;
             }
             0x4004 => {
                 self.pulse_2.duty_cycle = match (data >> 6) & 0x03 {
@@ -112,9 +108,9 @@ impl Apu {
                     _ => unreachable!(),
                 };
                 self.pulse_2.length_counter_halt = (data >> 5) & 0x01 != 0;
-                self.pulse_2.envelope_reload = data & 0x0F;
-                self.pulse_2.envelope = self.pulse_2.envelope_reload;
-                self.pulse_2.constant_volume_flag = (data >> 4) & 0x01 != 0;
+                self.pulse_2.envelope.divider_reload = data & 0x0F;
+                self.pulse_2.envelope.divider = self.pulse_2.envelope.divider_reload;
+                self.pulse_2.envelope.constant_volume_flag = (data >> 4) & 0x01 != 0;
             }
             0x4006 => self.pulse_2.timer_reload = data as u16,
             0x4007 => {
@@ -122,7 +118,7 @@ impl Apu {
                     (self.pulse_2.timer_reload & 0x00FF) | ((data as u16 & 0x07) << 8);
                 self.pulse_2.timer = self.pulse_2.timer_reload;
                 self.pulse_2.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
-                self.pulse_2.envelope_start_flag = true;
+                self.pulse_2.envelope.start_flag = true;
             }
             0x4015 => {
                 self.pulse_1.is_enabled = data & 0x01 != 0;
@@ -134,6 +130,8 @@ impl Apu {
 }
 
 struct PulseChannel {
+    envelope: Envelope,
+
     is_enabled: bool,
     length_counter_halt: bool,
     duty_cycle: u8,
@@ -141,17 +139,14 @@ struct PulseChannel {
     timer_reload: u16,
     sequence_counter: u8,
     length_counter: u8,
-    envelope: u8,
-    envelope_reload: u8,
-    decay_level: u8,
-    envelope_start_flag: bool,
-    constant_volume_flag: bool,
     output: i16,
 }
 
 impl PulseChannel {
     pub fn new() -> Self {
         Self {
+            envelope: Envelope::new(),
+
             is_enabled: false,
             length_counter_halt: false,
             duty_cycle: 0b00000001,
@@ -159,11 +154,6 @@ impl PulseChannel {
             timer_reload: 0,
             sequence_counter: 0,
             length_counter: 0,
-            envelope: 0,
-            envelope_reload: 0,
-            decay_level: 0,
-            envelope_start_flag: false,
-            constant_volume_flag: false,
             output: 0,
         }
     }
@@ -194,33 +184,62 @@ impl PulseChannel {
         }
     }
 
-    pub fn length_clock(&mut self) {
+    pub fn clock_length_counter(&mut self) {
         if self.length_counter > 0 && !self.length_counter_halt {
             self.length_counter -= 1;
         }
     }
 
-    pub fn envelope_clock(&mut self) {
-        if !self.envelope_start_flag {
-            self.envelope -= 1;
-        } else {
-            self.envelope_start_flag = false;
-            self.decay_level = 15;
-            self.envelope = self.envelope_reload + 1;
-        }
-        if self.envelope == 0 {
-            self.envelope = self.envelope_reload + 1;
-            if self.decay_level > 0 {
-                self.decay_level -= 1;
-            } else if self.length_counter_halt {
-                self.decay_level = 15;
-            }
-        }
+    pub fn clock_envelope(&mut self) {
+        self.envelope.clock(self.length_counter_halt);
+    }
+
+    pub fn output(&self) -> i16 {
+        (self.output as f32 * (self.envelope.output_volume as f32 / 15.0)) as i16
     }
 }
 
 impl Default for PulseChannel {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Default)]
+struct Envelope {
+    divider: u8,
+    divider_reload: u8,
+    decay_level: u8,
+    start_flag: bool,
+    constant_volume_flag: bool,
+    output_volume: u8,
+}
+
+impl Envelope {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn clock(&mut self, loop_flag: bool) {
+        if !self.start_flag {
+            self.divider -= 1;
+        } else {
+            self.start_flag = false;
+            self.decay_level = 15;
+            self.divider = self.divider_reload + 1;
+        }
+        if self.divider == 0 {
+            self.divider = self.divider_reload + 1;
+            if self.decay_level > 0 {
+                self.decay_level -= 1;
+            } else if loop_flag {
+                self.decay_level = 15;
+            }
+        }
+        self.output_volume = if self.constant_volume_flag {
+            self.divider_reload
+        } else {
+            self.decay_level
+        };
     }
 }
