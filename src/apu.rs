@@ -23,6 +23,8 @@ impl Apu {
     pub fn new() -> Self {
         Self {
             audio_buffer: Vec::with_capacity(BUFFER_SIZE),
+            pulse_1: PulseChannel::new(1),
+            pulse_2: PulseChannel::new(2),
             ..Default::default()
         }
     }
@@ -57,6 +59,9 @@ impl Apu {
             self.pulse_2.clock_length_counter();
             self.triangle.clock_length_counter();
             self.noise.clock_length_counter();
+
+            self.pulse_1.clock_sweep();
+            self.pulse_2.clock_sweep();
         }
 
         if self.clock_timer % 2 == 0 {
@@ -106,6 +111,15 @@ impl Apu {
                 self.pulse_1.envelope.divider = self.pulse_1.envelope.divider_reload;
                 self.pulse_1.envelope.constant_volume_flag = (data >> 4) & 0x01 != 0;
             }
+            0x4001 => {
+                self.pulse_1.sweep.shift_count = data & 0x07;
+                self.pulse_1.sweep.negate_flag = (data >> 3) & 0x01 != 0;
+                self.pulse_1.sweep.divider_reload = (data >> 4) & 0x07;
+                self.pulse_1.sweep.divider = self.pulse_1.sweep.divider_reload;
+                self.pulse_1.sweep.is_enabled = (data >> 7) & 0x01 != 0;
+                self.pulse_1.sweep.reload_flag = true;
+                self.pulse_1.sweep.target_period = self.pulse_1.timer_reload;
+            }
             0x4002 => self.pulse_1.timer_reload = data as u16,
             0x4003 => {
                 self.pulse_1.timer_reload =
@@ -113,6 +127,7 @@ impl Apu {
                 self.pulse_1.timer = self.pulse_1.timer_reload;
                 self.pulse_1.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
                 self.pulse_1.envelope.start_flag = true;
+                self.pulse_1.sweep.target_period = self.pulse_1.timer_reload;
             }
             0x4004 => {
                 self.pulse_2.duty_cycle = match (data >> 6) & 0x03 {
@@ -127,6 +142,15 @@ impl Apu {
                 self.pulse_2.envelope.divider = self.pulse_2.envelope.divider_reload;
                 self.pulse_2.envelope.constant_volume_flag = (data >> 4) & 0x01 != 0;
             }
+            0x4005 => {
+                self.pulse_2.sweep.shift_count = data & 0x07;
+                self.pulse_2.sweep.negate_flag = (data >> 3) & 0x01 != 0;
+                self.pulse_2.sweep.divider_reload = (data >> 4) & 0x07;
+                self.pulse_2.sweep.divider = self.pulse_2.sweep.divider_reload;
+                self.pulse_2.sweep.is_enabled = (data >> 7) & 0x01 != 0;
+                self.pulse_2.sweep.reload_flag = true;
+                self.pulse_2.sweep.target_period = self.pulse_2.timer_reload;
+            }
             0x4006 => self.pulse_2.timer_reload = data as u16,
             0x4007 => {
                 self.pulse_2.timer_reload =
@@ -134,6 +158,7 @@ impl Apu {
                 self.pulse_2.timer = self.pulse_2.timer_reload;
                 self.pulse_2.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
                 self.pulse_2.envelope.start_flag = true;
+                self.pulse_2.sweep.target_period = self.pulse_2.timer_reload;
             }
             0x4008 => {
                 self.triangle.length_counter_halt = (data >> 7) & 0x01 != 0;
@@ -176,6 +201,7 @@ impl Apu {
 
 struct PulseChannel {
     envelope: Envelope,
+    sweep: Sweep,
 
     is_enabled: bool,
     length_counter_halt: bool,
@@ -188,9 +214,10 @@ struct PulseChannel {
 }
 
 impl PulseChannel {
-    pub fn new() -> Self {
+    pub fn new(pulse_unit: u8) -> Self {
         Self {
             envelope: Envelope::new(),
+            sweep: Sweep::new(pulse_unit),
 
             is_enabled: false,
             length_counter_halt: false,
@@ -239,6 +266,11 @@ impl PulseChannel {
         self.envelope.clock(self.length_counter_halt);
     }
 
+    pub fn clock_sweep(&mut self) {
+        self.sweep.clock(self.timer_reload);
+        self.timer_reload = self.sweep.target_period;
+    }
+
     pub fn output(&self) -> i16 {
         (self.output as f32 * (self.envelope.output_volume as f32 / 15.0)) as i16
     }
@@ -246,7 +278,7 @@ impl PulseChannel {
 
 impl Default for PulseChannel {
     fn default() -> Self {
-        Self::new()
+        Self::new(1)
     }
 }
 
@@ -407,7 +439,7 @@ impl Envelope {
     pub fn clock(&mut self, loop_flag: bool) {
         if !self.start_flag {
             if self.divider > 0 {
-            self.divider -= 1;
+                self.divider -= 1;
             }
         } else {
             self.start_flag = false;
@@ -427,5 +459,55 @@ impl Envelope {
         } else {
             self.decay_level
         };
+    }
+}
+
+struct Sweep {
+    pulse_unit: u8,
+    is_enabled: bool,
+    divider: u8,
+    divider_reload: u8,
+    shift_count: u8,
+    negate_flag: bool,
+    reload_flag: bool,
+    target_period: u16,
+}
+
+impl Sweep {
+    pub fn new(pulse_unit: u8) -> Self {
+        Self {
+            pulse_unit,
+            is_enabled: false,
+            divider: 0,
+            divider_reload: 0,
+            shift_count: 0,
+            negate_flag: false,
+            reload_flag: false,
+            target_period: 0,
+        }
+    }
+
+    pub fn clock(&mut self, period: u16) {
+        self.divider = self.divider.wrapping_sub(1);
+        if self.divider == 0xFF {
+            let change_amount = (period >> self.shift_count) as i16;
+            let change_amount = if self.negate_flag {
+                if self.pulse_unit == 1 {
+                    -change_amount - 1
+                } else {
+                    -change_amount
+                }
+            } else {
+                change_amount
+            };
+            self.target_period = period.saturating_add_signed(change_amount);
+        }
+        if !self.is_enabled {
+            self.target_period = period;
+        }
+        if self.divider == 0xFF || self.reload_flag {
+            self.divider = self.divider_reload + 1;
+            self.reload_flag = false;
+        }
     }
 }
