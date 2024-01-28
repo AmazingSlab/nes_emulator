@@ -406,7 +406,9 @@ impl Envelope {
 
     pub fn clock(&mut self, loop_flag: bool) {
         if !self.start_flag {
+            if self.divider > 0 {
             self.divider -= 1;
+            }
         } else {
             self.start_flag = false;
             self.decay_level = 15;
