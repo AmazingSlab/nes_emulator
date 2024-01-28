@@ -244,7 +244,7 @@ pub fn main() {
             }
         }
 
-        if (run_emulation && device.size() < 4096) || step_frame {
+        if run_emulation || step_frame {
             let (controller_1, controller_2) = match replay {
                 Some(ref mut replay) if run_emulation || step_frame => match replay.next() {
                     None => Default::default(),
