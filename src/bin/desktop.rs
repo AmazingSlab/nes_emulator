@@ -244,33 +244,33 @@ pub fn main() {
             }
         }
 
-        let (controller_1, controller_2) = match replay {
-            Some(ref mut replay) if run_emulation || step_frame => match replay.next() {
-                None => Default::default(),
-                Some((command, controller_1, controller_2)) => {
-                    if command.soft_reset() {
-                        Bus::reset(cpu.clone(), ppu.clone());
+        if (run_emulation && device.size() < 4096) || step_frame {
+            let (controller_1, controller_2) = match replay {
+                Some(ref mut replay) if run_emulation || step_frame => match replay.next() {
+                    None => Default::default(),
+                    Some((command, controller_1, controller_2)) => {
+                        if command.soft_reset() {
+                            Bus::reset(cpu.clone(), ppu.clone());
+                        }
+                        (controller_1, controller_2)
                     }
+                },
+                Some(_) => Default::default(),
+                None => {
+                    let (controller_1, controller_2) = get_controller_state(&event_pump);
+                    if record_replay && (run_emulation || step_frame) {
+                        let command = InputCommand::new().with_screenshot(replay_screenshot);
+                        replay_recording.push((command, controller_1, controller_2));
+                        replay_screenshot = false;
+                    }
+
                     (controller_1, controller_2)
                 }
-            },
-            Some(_) => Default::default(),
-            None => {
-                let (controller_1, controller_2) = get_controller_state(&event_pump);
-                if record_replay && (run_emulation || step_frame) {
-                    let command = InputCommand::new().with_screenshot(replay_screenshot);
-                    replay_recording.push((command, controller_1, controller_2));
-                    replay_screenshot = false;
-                }
+            };
 
-                (controller_1, controller_2)
-            }
-        };
+            bus.borrow_mut()
+                .set_controller_state(controller_1, controller_2);
 
-        bus.borrow_mut()
-            .set_controller_state(controller_1, controller_2);
-
-        if (run_emulation && device.size() < 4096) || step_frame {
             while !ppu.borrow().is_frame_ready {
                 Bus::clock(bus.clone(), cpu.clone(), ppu.clone(), apu.clone());
             }
