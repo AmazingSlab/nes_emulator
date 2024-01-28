@@ -715,7 +715,7 @@ impl Ppu {
                     0x1C => 0x0C,
                     _ => addr,
                 };
-                self.palette_ram[addr as usize] = data;
+                self.palette_ram[addr as usize] = data & 0x3F;
             }
             _ => (),
         }
