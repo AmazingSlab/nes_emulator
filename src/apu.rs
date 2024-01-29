@@ -16,6 +16,11 @@ pub struct Apu {
     triangle: TriangleChannel,
     noise: NoiseChannel,
 
+    pub is_pulse_1_enabled: bool,
+    pub is_pulse_2_enabled: bool,
+    pub is_triangle_enabled: bool,
+    pub is_noise_enabled: bool,
+
     clock_timer: usize,
 }
 
@@ -25,6 +30,11 @@ impl Apu {
             audio_buffer: Vec::with_capacity(BUFFER_SIZE),
             pulse_1: PulseChannel::new(1),
             pulse_2: PulseChannel::new(2),
+
+            is_pulse_1_enabled: true,
+            is_pulse_2_enabled: true,
+            is_triangle_enabled: true,
+            is_noise_enabled: true,
             ..Default::default()
         }
     }
@@ -72,12 +82,20 @@ impl Apu {
         self.noise.clock();
 
         if self.clock_timer % 41 == 0 {
-            self.audio_buffer.push(
-                self.pulse_1.output()
-                    + self.pulse_2.output()
-                    + self.triangle.output
-                    + self.noise.output(),
-            );
+            let mut output = 0;
+            if self.is_pulse_1_enabled {
+                output += self.pulse_1.output();
+            }
+            if self.is_pulse_2_enabled {
+                output += self.pulse_2.output();
+            }
+            if self.is_triangle_enabled {
+                output += self.triangle.output;
+            }
+            if self.is_noise_enabled {
+                output += self.noise.output();
+            }
+            self.audio_buffer.push(output);
         }
         self.clock_timer += 1;
         if self.clock_timer == 14915 * 2 {

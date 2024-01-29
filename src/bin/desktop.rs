@@ -240,6 +240,38 @@ pub fn main() {
                     keycode: Some(Keycode::B),
                     ..
                 } => replay_screenshot = true,
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num1),
+                    ..
+                } => {
+                    let is_pulse_1_enabled = apu.borrow().is_pulse_1_enabled;
+                    apu.borrow_mut().is_pulse_1_enabled = !is_pulse_1_enabled;
+                    print_apu_channel_status(&apu);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num2),
+                    ..
+                } => {
+                    let is_pulse_2_enabled = apu.borrow().is_pulse_2_enabled;
+                    apu.borrow_mut().is_pulse_2_enabled = !is_pulse_2_enabled;
+                    print_apu_channel_status(&apu);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num3),
+                    ..
+                } => {
+                    let is_triangle_enabled = apu.borrow().is_triangle_enabled;
+                    apu.borrow_mut().is_triangle_enabled = !is_triangle_enabled;
+                    print_apu_channel_status(&apu);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num4),
+                    ..
+                } => {
+                    let is_noise_enabled = apu.borrow().is_noise_enabled;
+                    apu.borrow_mut().is_noise_enabled = !is_noise_enabled;
+                    print_apu_channel_status(&apu);
+                }
                 _ => {}
             }
         }
@@ -359,4 +391,13 @@ fn get_controller_state(event_pump: &sdl2::EventPump) -> (Controller, Controller
         .with_right(key(Scancode::D));
 
     (controller_1, controller_2)
+}
+
+fn print_apu_channel_status(apu: &Rc<RefCell<Apu>>) {
+    let p1 = apu.borrow().is_pulse_1_enabled;
+    let p2 = apu.borrow().is_pulse_2_enabled;
+    let t = apu.borrow().is_triangle_enabled;
+    let n = apu.borrow().is_noise_enabled;
+
+    println!("P1: {p1}, P2: {p2}, T: {t}, N: {n}");
 }
