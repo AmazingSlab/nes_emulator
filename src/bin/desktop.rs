@@ -128,7 +128,7 @@ pub fn main() {
         samples: None,
     };
     let device = audio_subsystem
-        .open_queue::<i16, _>(None, &desired_spec)
+        .open_queue::<f32, _>(None, &desired_spec)
         .unwrap();
     device.resume();
 
@@ -318,7 +318,7 @@ pub fn main() {
                 ppu.borrow_mut().draw_oam();
             }
         }
-        if device.size() > 4096 || !run_emulation {
+        if device.size() > 8192 || !run_emulation {
             std::thread::sleep(Duration::from_millis(1000 / FPS));
         }
 

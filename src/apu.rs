@@ -9,7 +9,7 @@ const NOISE_TIMER_MAP: [u16; 16] = [
 
 #[derive(Default)]
 pub struct Apu {
-    audio_buffer: Vec<i16>,
+    audio_buffer: Vec<f32>,
 
     pulse_1: PulseChannel,
     pulse_2: PulseChannel,
@@ -95,7 +95,7 @@ impl Apu {
             if self.is_noise_enabled {
                 output += self.noise.output();
             }
-            self.audio_buffer.push(output);
+            self.audio_buffer.push(output as f32 / i16::MAX as f32);
         }
         self.clock_timer += 1;
         if self.clock_timer == 14915 * 2 {
@@ -103,7 +103,7 @@ impl Apu {
         }
     }
 
-    pub fn drain_audio_buffer(&mut self) -> Vec<i16> {
+    pub fn drain_audio_buffer(&mut self) -> Vec<f32> {
         std::mem::replace(&mut self.audio_buffer, Vec::with_capacity(BUFFER_SIZE))
     }
 
