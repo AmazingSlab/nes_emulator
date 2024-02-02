@@ -21,6 +21,8 @@ pub struct Apu {
     pub is_triangle_enabled: bool,
     pub is_noise_enabled: bool,
 
+    use_five_frame_sequence: bool,
+    disable_frame_interrupt: bool,
     clock_timer: usize,
 }
 
@@ -51,11 +53,14 @@ impl Apu {
             is_quarter_frame = true;
         } else if self.clock_timer == 14914 * 2 {
             // Quarter frame.
-        } else if self.clock_timer == 14914 * 2 + 1 {
+        } else if self.clock_timer == 14914 * 2 + 1 && !self.use_five_frame_sequence {
             is_quarter_frame = true;
             is_half_frame = true;
         } else if self.clock_timer == 14915 * 2 {
             // Quarter frame.
+        } else if self.clock_timer == 18640 * 2 + 1 && self.use_five_frame_sequence {
+            is_quarter_frame = true;
+            is_half_frame = true;
         }
 
         if is_quarter_frame {
@@ -98,7 +103,9 @@ impl Apu {
             self.audio_buffer.push(output as f32 / i16::MAX as f32);
         }
         self.clock_timer += 1;
-        if self.clock_timer == 14915 * 2 {
+        if (self.clock_timer == 14915 * 2 && !self.use_five_frame_sequence)
+            || (self.clock_timer == 18641 * 2 && self.use_five_frame_sequence)
+        {
             self.clock_timer = 0;
         }
     }
@@ -219,6 +226,16 @@ impl Apu {
                 self.pulse_2.is_enabled = data & 0x02 != 0;
                 self.triangle.is_enabled = data & 0x04 != 0;
                 self.noise.is_enabled = data & 0x08 != 0;
+            }
+            0x4017 => {
+                self.use_five_frame_sequence = data & 0x80 != 0;
+                self.disable_frame_interrupt = data & 0x40 != 0;
+                if data & 0x80 != 0 {
+                    self.pulse_1.clock_length_counter();
+                    self.pulse_2.clock_length_counter();
+                    self.triangle.clock_length_counter();
+                    self.noise.clock_length_counter();
+                }
             }
             _ => (),
         }
