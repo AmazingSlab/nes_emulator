@@ -31,6 +31,7 @@ pub struct Nes {
     bus: Rc<RefCell<Bus>>,
     cpu: Rc<RefCell<Cpu>>,
     ppu: Rc<RefCell<Ppu>>,
+    apu: Rc<RefCell<Apu>>,
 }
 
 #[cfg(feature = "wasm")]
@@ -41,10 +42,10 @@ impl Nes {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
         let apu = Rc::new(RefCell::new(Apu::new()));
-        let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), apu, cartridge);
+        let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), apu.clone(), cartridge);
         cpu.borrow_mut().reset();
 
-        Ok(Self { bus, cpu, ppu })
+        Ok(Self { bus, cpu, ppu, apu })
     }
 
     pub fn tick(&self) {
@@ -58,6 +59,18 @@ impl Nes {
         self.ppu.borrow().buffer_raw()
     }
 
+    pub fn drain_audio_buffer(&mut self) {
+        self.apu.borrow_mut().drain_audio_buffer();
+    }
+
+    pub fn audio_buffer_raw(&mut self) -> *const f32 {
+        self.apu.borrow_mut().audio_buffer().as_ptr()
+    }
+
+    pub fn audio_buffer_length(&self) -> usize {
+        self.apu.borrow().audio_buffer_length()
+    }
+
     pub fn set_controller_state(&self, controller_1: Controller, controller_2: Controller) {
         self.bus
             .borrow_mut()
@@ -65,7 +78,12 @@ impl Nes {
     }
 
     fn clock(&self) {
-        Bus::clock(self.bus.clone(), self.cpu.clone(), self.ppu.clone());
+        Bus::clock(
+            self.bus.clone(),
+            self.cpu.clone(),
+            self.ppu.clone(),
+            self.apu.clone(),
+        );
     }
 }
 

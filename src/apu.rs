@@ -107,6 +107,14 @@ impl Apu {
         std::mem::replace(&mut self.audio_buffer, Vec::with_capacity(BUFFER_SIZE))
     }
 
+    pub fn audio_buffer(&self) -> &[f32] {
+        &self.audio_buffer
+    }
+
+    pub fn audio_buffer_length(&self) -> usize {
+        self.audio_buffer.len()
+    }
+
     pub fn cpu_read(&self, addr: u16) -> u8 {
         match addr {
             0x4000 => 0,
