@@ -54,6 +54,7 @@ pub struct Ppu {
     sprite_pattern_shift_high: [u8; 8],
     sprite_attrib: [u8; 8],
     sprite_x_pos: [u8; 8],
+    is_sprite_zero_active: bool,
 
     pub is_frame_ready: bool,
     pub emit_nmi: bool,
@@ -141,6 +142,7 @@ impl Ppu {
             sprite_pattern_shift_high: [0; 8],
             sprite_attrib: [0; 8],
             sprite_x_pos: [0; 8],
+            is_sprite_zero_active: false,
 
             is_frame_ready: false,
             emit_nmi: false,
@@ -264,6 +266,9 @@ impl Ppu {
                     _ => (),
                 }
             }
+            if self.cycle == 255 {
+                self.is_sprite_zero_active = false;
+            }
             if self.cycle == 256 {
                 self.increment_y_scroll();
             }
@@ -317,6 +322,9 @@ impl Ppu {
                     if self.scanline.wrapping_sub(y_pos as u16)
                         < (self.control.sprite_size() as u16 + 1) * 8
                     {
+                        if sprite == 0 {
+                            self.is_sprite_zero_active = true;
+                        }
                         for i in 0..4 {
                             self.secondary_oam[self.secondary_oam_sprite_count as usize * 4 + i] =
                                 self.oam[sprite * 4 + i];
@@ -406,6 +414,7 @@ impl Ppu {
         let mut sprite_pattern = 0;
         let mut sprite_palette = 0;
         let mut sprite_attrib = 0;
+        let mut active_sprite = 0;
         for sprite in 0..8 {
             if self.sprite_x_pos[sprite] != 0 {
                 continue;
@@ -418,6 +427,7 @@ impl Ppu {
                 let attrib = self.sprite_attrib[sprite];
                 sprite_palette = attrib & 0x03;
                 sprite_attrib = attrib;
+                active_sprite = sprite;
                 break;
             }
         }
@@ -441,7 +451,9 @@ impl Ppu {
         } else if background_pattern != 0 && sprite_pattern == 0 {
             color_index = self.sample_palette_ram(background_palette, background_pattern);
         } else if background_pattern != 0 && sprite_pattern != 0 {
-            self.status.set_sprite_zero_hit(true);
+            if self.is_sprite_zero_active && active_sprite == 0 {
+                self.status.set_sprite_zero_hit(true);
+            }
             if sprite_attrib & (1 << 5) == 0 {
                 color_index = self.sample_palette_ram(sprite_palette + 4, sprite_pattern);
             } else {
