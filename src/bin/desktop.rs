@@ -4,6 +4,7 @@ use sdl2::{
     event::Event,
     keyboard::{Keycode, Scancode},
     pixels::PixelFormatEnum,
+    video::Window,
 };
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -19,21 +20,6 @@ const OAM_SCALE: u32 = 4;
 
 pub fn main() {
     let mut args = std::env::args();
-    let rom_path = args.nth(1).expect("no rom path provided");
-    let replay_data = args
-        .next()
-        .map(|path| std::fs::read(path).expect("failed to read replay"))
-        .map(|data| String::from_utf8_lossy(&data).to_string())
-        .unwrap_or_default();
-
-    let mut replay = match replay_data.is_empty() {
-        true => None,
-        false => Some(
-            Replay::new(replay_data.lines())
-                .map_err(|err| format!("failed to parse replay: {err}"))
-                .unwrap(),
-        ),
-    };
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -44,6 +30,24 @@ pub fn main() {
         .position_centered()
         .build()
         .unwrap();
+
+    let rom_path = args
+        .nth(1)
+        .unwrap_or_else(|| show_error("No ROM path provided.", &window));
+    let replay_data = args
+        .next()
+        .map(|path| {
+            std::fs::read(path).unwrap_or_else(|err| {
+                show_error(&format!("Failed to open replay file: {err}"), &window)
+            })
+        })
+        .map(|data| String::from_utf8_lossy(&data).to_string())
+        .unwrap_or_default();
+
+    let mut replay = (!replay_data.is_empty()).then(|| {
+        Replay::new(replay_data.lines())
+            .unwrap_or_else(|err| show_error(&format!("Failed to parse replay: {err}"), &window))
+    });
 
     #[cfg(feature = "memview")]
     let nametable_window = video_subsystem
@@ -132,8 +136,11 @@ pub fn main() {
         .unwrap();
     device.resume();
 
-    let rom = std::fs::read(rom_path).expect("failed to read rom");
-    let cartridge = Rc::new(RefCell::new(Cartridge::new(&rom).unwrap()));
+    let rom = std::fs::read(rom_path)
+        .unwrap_or_else(|err| show_error(&format!("Failed to read ROM: {err}"), canvas.window()));
+    let cartridge = Cartridge::new(&rom)
+        .unwrap_or_else(|err| show_error(&format!("Failed to load ROM: {err}"), canvas.window()));
+    let cartridge = Rc::new(RefCell::new(cartridge));
     let cpu = Rc::new(RefCell::new(Cpu::new()));
     let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
     let apu = Rc::new(RefCell::new(Apu::new()));
@@ -400,4 +407,13 @@ fn print_apu_channel_status(apu: &Rc<RefCell<Apu>>) {
     let n = apu.borrow().is_noise_enabled;
 
     println!("P1: {p1}, P2: {p2}, T: {t}, N: {n}");
+}
+
+fn show_error(message: &str, window: &Window) -> ! {
+    use sdl2::messagebox::MessageBoxFlag;
+
+    sdl2::messagebox::show_simple_message_box(MessageBoxFlag::ERROR, "Error", message, window)
+        .unwrap();
+
+    panic!("{message}")
 }
