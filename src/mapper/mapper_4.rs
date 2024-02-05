@@ -4,6 +4,8 @@ pub struct Mapper4 {
     prg_rom: Vec<u8>,
     prg_ram: Vec<u8>,
     chr_rom: Vec<u8>,
+    has_chr_ram: bool,
+
     bank_register: [u8; 8],
     bank_select: BankSelect,
     irq_latch: u8,
@@ -18,10 +20,19 @@ pub struct Mapper4 {
 
 impl Mapper4 {
     pub fn new(prg_rom: &[u8], chr_rom: &[u8]) -> Result<Self, String> {
+        let has_chr_ram = chr_rom.is_empty();
+        let chr_rom = if has_chr_ram {
+            vec![0; 8 * 1024]
+        } else {
+            chr_rom.into()
+        };
+
         Ok(Self {
             prg_rom: prg_rom.into(),
             prg_ram: vec![0; 8 * 1024],
-            chr_rom: chr_rom.into(),
+            chr_rom,
+            has_chr_ram,
+
             bank_register: [0; 8],
             bank_select: BankSelect::default(),
             irq_latch: 0,
@@ -53,7 +64,7 @@ impl Mapper4 {
                 }
             }
             0xE000..=0xFFFF => self.prg_banks - 1,
-            _ => todo!(),
+            _ => 0,
         } & 0x03F;
 
         (addr & 0x1FFF) as usize | (bank as usize * 8 * 1024)
@@ -62,13 +73,13 @@ impl Mapper4 {
     fn map_ppu_addr(&self, addr: u16) -> usize {
         let bank = if self.bank_select.chr_inversion() == 0 {
             match addr {
-                0x0000..=0x07FF => self.bank_register[0],
-                0x0800..=0x0FFF => self.bank_register[1],
+                0x0000..=0x07FF => self.bank_register[0] & 0xFE,
+                0x0800..=0x0FFF => self.bank_register[1] & 0xFE,
                 0x1000..=0x13FF => self.bank_register[2],
                 0x1400..=0x17FF => self.bank_register[3],
                 0x1800..=0x1BFF => self.bank_register[4],
                 0x1C00..=0x1FFF => self.bank_register[5],
-                _ => todo!(),
+                _ => unreachable!(),
             }
         } else {
             match addr {
@@ -76,9 +87,9 @@ impl Mapper4 {
                 0x0400..=0x07FF => self.bank_register[3],
                 0x0800..=0x0BFF => self.bank_register[4],
                 0x0C00..=0x0FFF => self.bank_register[5],
-                0x1000..=0x17FF => self.bank_register[0],
-                0x1800..=0x1FFF => self.bank_register[1],
-                _ => todo!(),
+                0x1000..=0x17FF => self.bank_register[0] & 0xFE,
+                0x1800..=0x1FFF => self.bank_register[1] & 0xFE,
+                _ => unreachable!(),
             }
         };
 
@@ -90,7 +101,7 @@ impl Mapper4 {
             1
         };
 
-        (addr as usize & (bank_size * 1024 - 1)) | (bank as usize * 1024)
+        (addr as usize & (bank_size * 1024 - 1)) | (bank as usize * 1024) & (self.chr_rom.len() - 1)
     }
 }
 
@@ -142,15 +153,16 @@ impl Mapper for Mapper4 {
     }
 
     fn ppu_read(&self, addr: u16) -> u8 {
-        if !self.chr_rom.is_empty() {
-            let addr = self.map_ppu_addr(addr);
-            self.chr_rom[addr]
-        } else {
-            0
-        }
+        let addr = self.map_ppu_addr(addr);
+        self.chr_rom[addr]
     }
 
-    fn ppu_write(&mut self, _addr: u16, _data: u8) {}
+    fn ppu_write(&mut self, addr: u16, data: u8) {
+        if self.has_chr_ram {
+            let addr = self.map_ppu_addr(addr);
+            self.chr_rom[addr] = data;
+        }
+    }
 
     fn mirroring(&self) -> Mirroring {
         self.mirroring
