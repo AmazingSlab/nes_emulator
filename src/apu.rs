@@ -153,7 +153,9 @@ impl Apu {
                 self.pulse_1.sweep.reload_flag = true;
                 self.pulse_1.sweep.target_period = self.pulse_1.timer_reload;
             }
-            0x4002 => self.pulse_1.timer_reload = data as u16,
+            0x4002 => {
+                self.pulse_1.timer_reload = (self.pulse_1.timer_reload & 0xFF00) | data as u16
+            }
             0x4003 => {
                 self.pulse_1.timer_reload =
                     (self.pulse_1.timer_reload & 0x00FF) | ((data as u16 & 0x07) << 8);
@@ -184,7 +186,9 @@ impl Apu {
                 self.pulse_2.sweep.reload_flag = true;
                 self.pulse_2.sweep.target_period = self.pulse_2.timer_reload;
             }
-            0x4006 => self.pulse_2.timer_reload = data as u16,
+            0x4006 => {
+                self.pulse_2.timer_reload = (self.pulse_2.timer_reload & 0xFF00) | data as u16
+            }
             0x4007 => {
                 self.pulse_2.timer_reload =
                     (self.pulse_2.timer_reload & 0x00FF) | ((data as u16 & 0x07) << 8);
@@ -197,7 +201,9 @@ impl Apu {
                 self.triangle.length_counter_halt = (data >> 7) & 0x01 != 0;
                 self.triangle.linear_counter_reload = data & 0x7F;
             }
-            0x400A => self.triangle.timer_reload = data as u16,
+            0x400A => {
+                self.triangle.timer_reload = (self.triangle.timer_reload & 0xFF00) | data as u16
+            }
             0x400B => {
                 self.triangle.timer_reload =
                     (self.triangle.timer_reload & 0x00FF) | ((data as u16 & 0x07) << 8);
