@@ -13,11 +13,12 @@ pub struct Cartridge {
 
 impl Cartridge {
     pub fn new(bytes: &[u8]) -> Result<Self, String> {
-        if &bytes[0..4] != b"NES\x1a" {
+        let (header, rest) = bytes.split_at(16);
+        if &header[0..4] != b"NES\x1a" {
             return Err("not a nes file".into());
         }
 
-        let rom_info = RomInfo::new(&bytes[0..16].try_into().unwrap());
+        let rom_info = RomInfo::new(header.try_into().unwrap());
         println!("rom info:\n{rom_info}");
 
         let prg_rom_blocks = rom_info.prg_rom_blocks;
@@ -26,9 +27,10 @@ impl Cartridge {
         let mirror_flag = rom_info.mirror_flag;
 
         let prg_rom_bytes = prg_rom_blocks as usize * 16 * 1024;
-        let prg_rom = &bytes[16..prg_rom_bytes + 16];
         let chr_rom_bytes = chr_rom_blocks as usize * 8 * 1024;
-        let chr_rom = &bytes[prg_rom_bytes + 16..prg_rom_bytes + 16 + chr_rom_bytes];
+
+        let (prg_rom, rest) = rest.split_at(prg_rom_bytes);
+        let (chr_rom, _) = rest.split_at(chr_rom_bytes);
 
         let mapper: Box<dyn Mapper> = match mapper_id {
             0 => Box::new(Mapper0::new(prg_rom, chr_rom, prg_rom_blocks, mirror_flag)?),
