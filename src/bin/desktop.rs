@@ -6,7 +6,7 @@ use sdl2::{
     pixels::PixelFormatEnum,
     video::Window,
 };
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, fmt::Display, rc::Rc, time::Duration};
 
 const MAIN_SCALE: u32 = 4;
 const FPS: u64 = 60;
@@ -31,23 +31,15 @@ pub fn main() {
         .build()
         .unwrap();
 
-    let rom_path = args
-        .nth(1)
-        .unwrap_or_else(|| show_error("No ROM path provided.", &window));
+    let rom_path = args.nth(1).error_message("No ROM path provided", &window);
     let replay_data = args
         .next()
-        .map(|path| {
-            std::fs::read(path).unwrap_or_else(|err| {
-                show_error(&format!("Failed to open replay file: {err}"), &window)
-            })
-        })
+        .map(|path| std::fs::read(path).error_message("Failed to open replay file", &window))
         .map(|data| String::from_utf8_lossy(&data).to_string())
         .unwrap_or_default();
 
-    let mut replay = (!replay_data.is_empty()).then(|| {
-        Replay::new(replay_data.lines())
-            .unwrap_or_else(|err| show_error(&format!("Failed to parse replay: {err}"), &window))
-    });
+    let mut replay = (!replay_data.is_empty())
+        .then(|| Replay::new(replay_data.lines()).error_message("Failed to parse replay", &window));
 
     #[cfg(feature = "memview")]
     let nametable_window = video_subsystem
@@ -136,10 +128,8 @@ pub fn main() {
         .unwrap();
     device.resume();
 
-    let rom = std::fs::read(rom_path)
-        .unwrap_or_else(|err| show_error(&format!("Failed to read ROM: {err}"), canvas.window()));
-    let cartridge = Cartridge::new(&rom)
-        .unwrap_or_else(|err| show_error(&format!("Failed to load ROM: {err}"), canvas.window()));
+    let rom = std::fs::read(rom_path).error_message("Failed to read ROM", canvas.window());
+    let cartridge = Cartridge::new(&rom).error_message("Failed to load ROM", canvas.window());
     let cartridge = Rc::new(RefCell::new(cartridge));
     let cpu = Rc::new(RefCell::new(Cpu::new()));
     let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
@@ -407,6 +397,28 @@ fn print_apu_channel_status(apu: &Rc<RefCell<Apu>>) {
     let n = apu.borrow().is_noise_enabled;
 
     println!("P1: {p1}, P2: {p2}, T: {t}, N: {n}");
+}
+
+trait ErrorMessage {
+    type Output;
+    fn error_message(self, message: &str, window: &Window) -> Self::Output;
+}
+
+impl<T, E> ErrorMessage for Result<T, E>
+where
+    E: Display,
+{
+    type Output = T;
+    fn error_message(self, message: &str, window: &Window) -> T {
+        self.unwrap_or_else(|err| show_error(&format!("{message}: {err}"), window))
+    }
+}
+
+impl<T> ErrorMessage for Option<T> {
+    type Output = T;
+    fn error_message(self, message: &str, window: &Window) -> T {
+        self.unwrap_or_else(|| show_error(message, window))
+    }
 }
 
 fn show_error(message: &str, window: &Window) -> ! {
