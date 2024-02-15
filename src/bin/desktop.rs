@@ -145,15 +145,6 @@ pub fn main() {
     let mut replay_screenshot = false;
     let mut replay_recording: Vec<(InputCommand, Controller, Controller)> = Vec::new();
 
-    // Controls:
-    // ESC: Quit.
-    // P: Toggle real-time emulation.
-    // I: Step forward one CPU instruction.
-    // Space: Step forward one frame.
-    // R: Reset.
-    // Q/E: Cycle between pattern table palettes.
-    // V: Start/stop replay recording.
-    // B: Record screenshot.
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
