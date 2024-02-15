@@ -371,8 +371,8 @@ fn get_controller_state(event_pump: &sdl2::EventPump) -> (Controller, Controller
         .with_right(key(Scancode::Right));
 
     let controller_2 = Controller::new()
-        .with_a(key(Scancode::H))
-        .with_b(key(Scancode::G))
+        .with_a(key(Scancode::L))
+        .with_b(key(Scancode::K))
         .with_up(key(Scancode::W))
         .with_down(key(Scancode::S))
         .with_left(key(Scancode::A))
