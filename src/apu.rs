@@ -1,4 +1,4 @@
-const BUFFER_SIZE: usize = 8 * 1024;
+const BUFFER_SIZE: usize = 1024;
 const VOLUME: i16 = 2000;
 const LENGTH_COUNTER_MAP: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
