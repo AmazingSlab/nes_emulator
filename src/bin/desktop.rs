@@ -260,6 +260,14 @@ pub fn main() {
                     apu.borrow_mut().is_noise_enabled = !is_noise_enabled;
                     print_apu_channel_status(&apu);
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Num5),
+                    ..
+                } => {
+                    let is_dmc_enabled = apu.borrow().is_dmc_enabled;
+                    apu.borrow_mut().is_dmc_enabled = !is_dmc_enabled;
+                    print_apu_channel_status(&apu);
+                }
                 _ => {}
             }
         }
@@ -386,8 +394,9 @@ fn print_apu_channel_status(apu: &Rc<RefCell<Apu>>) {
     let p2 = apu.borrow().is_pulse_2_enabled;
     let t = apu.borrow().is_triangle_enabled;
     let n = apu.borrow().is_noise_enabled;
+    let d = apu.borrow().is_dmc_enabled;
 
-    println!("P1: {p1}, P2: {p2}, T: {t}, N: {n}");
+    println!("P1: {p1}, P2: {p2}, T: {t}, N: {n}, D: {d}");
 }
 
 trait ErrorMessage {
