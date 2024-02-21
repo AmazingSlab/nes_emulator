@@ -4,7 +4,7 @@ use crate::{concat_bytes, Apu, Cartridge, Controller, Cpu, Ppu};
 
 pub struct Bus {
     cpu: Rc<RefCell<Cpu>>,
-    ram: [u8; 2048],
+    ram: Box<[u8; 2048]>,
     ppu: Rc<RefCell<Ppu>>,
     apu: Rc<RefCell<Apu>>,
     cartridge: Rc<RefCell<Cartridge>>,
@@ -24,7 +24,7 @@ pub struct Bus {
 impl Bus {
     pub fn new(
         cpu: Rc<RefCell<Cpu>>,
-        ram: [u8; 2048],
+        ram: Box<[u8; 2048]>,
         ppu: Rc<RefCell<Ppu>>,
         apu: Rc<RefCell<Apu>>,
         cartridge: Rc<RefCell<Cartridge>>,
