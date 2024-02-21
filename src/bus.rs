@@ -15,9 +15,10 @@ pub struct Bus {
     controller_strobe: bool,
 
     cycle: usize,
-    is_dma_active: bool,
-    dma_dummy: bool,
-    dma_data: u8,
+    is_oam_dma_active: bool,
+    oam_dma_dummy: bool,
+    dmc_dma_dummy: bool,
+    oam_dma_data: u8,
     emit_irq: bool,
 }
 
@@ -42,9 +43,10 @@ impl Bus {
             controller_strobe: false,
 
             cycle: 0,
-            is_dma_active: false,
-            dma_dummy: true,
-            dma_data: 0,
+            is_oam_dma_active: false,
+            oam_dma_dummy: true,
+            dmc_dma_dummy: true,
+            oam_dma_data: 0,
             emit_irq: false,
         };
 
@@ -73,7 +75,7 @@ impl Bus {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize & 0x07FF],
             0x2000..=0x3FFF => self.ppu.borrow_mut().cpu_read(addr & 0x07),
-            0x4000..=0x4013 | 0x4015 => self.apu.borrow().cpu_read(addr),
+            0x4000..=0x4013 | 0x4015 => self.apu.borrow_mut().cpu_read(addr),
             0x4014 => self.ppu.borrow_mut().cpu_read(addr),
             0x4016 => {
                 if self.controller_strobe {
@@ -103,8 +105,8 @@ impl Bus {
             0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.borrow_mut().cpu_write(addr, data),
             0x4014 => {
                 self.ppu.borrow_mut().cpu_write(addr, data);
-                self.is_dma_active = true;
-                self.dma_dummy = true;
+                self.is_oam_dma_active = true;
+                self.oam_dma_dummy = true;
             }
             0x4016 => {
                 self.controller_strobe = (data & 0x01) != 0;
@@ -141,24 +143,38 @@ impl Bus {
         ppu: Rc<RefCell<Ppu>>,
         apu: Rc<RefCell<Apu>>,
     ) {
-        if !bus.borrow().is_dma_active {
+        if !bus.borrow().is_oam_dma_active && !apu.borrow().is_dmc_dma_active() {
             cpu.borrow_mut().clock();
-        } else if bus.borrow().dma_dummy {
-            if bus.borrow().cycle % 2 == 1 {
-                bus.borrow_mut().dma_dummy = false;
-            }
-        } else {
-            let page = ppu.borrow().oam_dma_page;
-            let addr = ppu.borrow().oam_addr;
-            if bus.borrow().cycle % 2 == 0 {
-                let addr = concat_bytes(addr, page);
-                bus.borrow_mut().dma_data = cpu.borrow().read(addr);
+        } else if apu.borrow().is_dmc_dma_active() {
+            // TODO: Align with OAM DMA to prevent sprite corruption.
+            if bus.borrow().dmc_dma_dummy {
+                if bus.borrow().cycle % 2 == 1 {
+                    bus.borrow_mut().dmc_dma_dummy = false;
+                }
             } else {
-                // Write to the OAMDATA register.
-                ppu.borrow_mut().cpu_write(0x04, bus.borrow().dma_data);
-                if ppu.borrow().oam_addr == 0 {
-                    bus.borrow_mut().is_dma_active = false;
-                    bus.borrow_mut().dma_dummy = true;
+                let sample_byte = bus.borrow_mut().cpu_read(apu.borrow().dmc_address());
+                apu.borrow_mut().fill_dmc_buffer(sample_byte);
+                apu.borrow_mut().disable_dmc_dma();
+                bus.borrow_mut().dmc_dma_dummy = true;
+            }
+        } else if bus.borrow().is_oam_dma_active {
+            if bus.borrow().oam_dma_dummy {
+                if bus.borrow().cycle % 2 == 1 {
+                    bus.borrow_mut().oam_dma_dummy = false;
+                }
+            } else {
+                let page = ppu.borrow().oam_dma_page;
+                let addr = ppu.borrow().oam_addr;
+                if bus.borrow().cycle % 2 == 0 {
+                    let addr = concat_bytes(addr, page);
+                    bus.borrow_mut().oam_dma_data = cpu.borrow().read(addr);
+                } else {
+                    // Write to the OAMDATA register.
+                    ppu.borrow_mut().cpu_write(0x04, bus.borrow().oam_dma_data);
+                    if ppu.borrow().oam_addr == 0 {
+                        bus.borrow_mut().is_oam_dma_active = false;
+                        bus.borrow_mut().oam_dma_dummy = true;
+                    }
                 }
             }
         }
@@ -166,11 +182,17 @@ impl Bus {
         for _ in 0..3 {
             ppu.borrow_mut().clock();
         }
-        if !bus.borrow().is_dma_active && ppu.borrow().emit_nmi {
+        if !bus.borrow().is_oam_dma_active
+            && !apu.borrow().is_dmc_dma_active()
+            && ppu.borrow().emit_nmi
+        {
             cpu.borrow_mut().nmi();
             ppu.borrow_mut().emit_nmi = false;
         }
-        if !bus.borrow().is_dma_active && bus.borrow().emit_irq {
+        if !bus.borrow().is_oam_dma_active
+            && !apu.borrow().is_dmc_dma_active()
+            && bus.borrow().emit_irq
+        {
             cpu.borrow_mut().irq();
             bus.borrow_mut().emit_irq = false;
         }

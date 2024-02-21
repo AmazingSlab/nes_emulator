@@ -7,6 +7,9 @@ const LENGTH_COUNTER_MAP: [u8; 32] = [
 const NOISE_TIMER_MAP: [u16; 16] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
 ];
+const DMC_RATE_MAP: [u16; 16] = [
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
+];
 
 #[derive(Default)]
 pub struct Apu {
@@ -16,14 +19,17 @@ pub struct Apu {
     pulse_2: PulseChannel,
     triangle: TriangleChannel,
     noise: NoiseChannel,
+    dmc: DmcChannel,
 
     pub is_pulse_1_enabled: bool,
     pub is_pulse_2_enabled: bool,
     pub is_triangle_enabled: bool,
     pub is_noise_enabled: bool,
+    pub is_dmc_enabled: bool,
 
     use_five_frame_sequence: bool,
     disable_frame_interrupt: bool,
+    frame_interrupt_flag: bool,
     clock_timer: usize,
 }
 
@@ -38,6 +44,7 @@ impl Apu {
             is_pulse_2_enabled: true,
             is_triangle_enabled: true,
             is_noise_enabled: true,
+            is_dmc_enabled: true,
             ..Default::default()
         }
     }
@@ -45,6 +52,7 @@ impl Apu {
     pub fn clock(&mut self) {
         let mut is_quarter_frame = false;
         let mut is_half_frame = false;
+        let mut set_interrupt = false;
         if self.clock_timer == 3728 * 2 + 1 {
             is_quarter_frame = true;
         } else if self.clock_timer == 7456 * 2 + 1 {
@@ -53,12 +61,13 @@ impl Apu {
         } else if self.clock_timer == 11185 * 2 + 1 {
             is_quarter_frame = true;
         } else if self.clock_timer == 14914 * 2 {
-            // Quarter frame.
+            set_interrupt = true;
         } else if self.clock_timer == 14914 * 2 + 1 && !self.use_five_frame_sequence {
             is_quarter_frame = true;
             is_half_frame = true;
+            set_interrupt = true;
         } else if self.clock_timer == 14915 * 2 {
-            // Quarter frame.
+            set_interrupt = true;
         } else if self.clock_timer == 18640 * 2 + 1 && self.use_five_frame_sequence {
             is_quarter_frame = true;
             is_half_frame = true;
@@ -86,6 +95,7 @@ impl Apu {
         }
         self.triangle.clock();
         self.noise.clock();
+        self.dmc.clock();
 
         if self.clock_timer % 41 == 0 {
             let mut output = 0;
@@ -101,8 +111,16 @@ impl Apu {
             if self.is_noise_enabled {
                 output += self.noise.output();
             }
+            if self.is_dmc_enabled {
+                output += self.dmc.output;
+            }
             self.audio_buffer.push(output as f32 / i16::MAX as f32);
         }
+
+        if set_interrupt && !self.disable_frame_interrupt && !self.use_five_frame_sequence {
+            self.frame_interrupt_flag = true;
+        }
+
         self.clock_timer += 1;
         if (self.clock_timer == 14915 * 2 && !self.use_five_frame_sequence)
             || (self.clock_timer == 18641 * 2 && self.use_five_frame_sequence)
@@ -123,9 +141,37 @@ impl Apu {
         self.audio_buffer.len()
     }
 
-    pub fn cpu_read(&self, addr: u16) -> u8 {
+    pub fn fill_dmc_buffer(&mut self, sample_byte: u8) {
+        self.dmc.sample_buffer = sample_byte;
+    }
+
+    pub fn is_dmc_dma_active(&self) -> bool {
+        self.dmc.is_dma_active
+    }
+
+    pub fn disable_dmc_dma(&mut self) {
+        self.dmc.is_dma_active = false;
+        self.dmc.was_dma_active = true;
+    }
+
+    pub fn dmc_address(&self) -> u16 {
+        self.dmc.address_counter
+    }
+
+    pub fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             0x4000 => 0,
+            0x4015 => {
+                let p1 = (self.pulse_1.length_counter > 1) as u8;
+                let p2 = (self.pulse_2.length_counter > 1) as u8;
+                let t = (self.triangle.length_counter > 1) as u8;
+                let n = (self.noise.length_counter > 1) as u8;
+                let f = self.frame_interrupt_flag as u8;
+
+                self.frame_interrupt_flag = false;
+
+                (f << 5) | (n << 3) | (t << 2) | (p2 << 1) | p1
+            }
             _ => 0,
         }
     }
@@ -228,11 +274,21 @@ impl Apu {
                 self.noise.length_counter = LENGTH_COUNTER_MAP[((data >> 3) & 0x1F) as usize];
                 self.noise.envelope.start_flag = true;
             }
+            0x4010 => {
+                self.dmc.is_irq_enabled = data & 0x80 != 0;
+                self.dmc.loop_flag = data & 0x40 != 0;
+                self.dmc.timer_reload = DMC_RATE_MAP[(data & 0x0F) as usize];
+                self.dmc.timer = self.dmc.timer_reload;
+            }
+            0x4011 => self.dmc.output_level = data & 0x7F,
+            0x4012 => self.dmc.sample_address = data,
+            0x4013 => self.dmc.sample_length = data,
             0x4015 => {
                 self.pulse_1.is_enabled = data & 0x01 != 0;
                 self.pulse_2.is_enabled = data & 0x02 != 0;
                 self.triangle.is_enabled = data & 0x04 != 0;
                 self.noise.is_enabled = data & 0x08 != 0;
+                self.dmc.is_automatic_playback_enabled = data & 0x10 != 0;
             }
             0x4017 => {
                 self.use_five_frame_sequence = data & 0x80 != 0;
@@ -468,6 +524,88 @@ impl NoiseChannel {
 impl Default for NoiseChannel {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Default)]
+struct DmcChannel {
+    is_automatic_playback_enabled: bool,
+    is_irq_enabled: bool,
+    is_dma_active: bool,
+    was_dma_active: bool,
+    loop_flag: bool,
+    silence_flag: bool,
+    sample_buffer: u8,
+    sample_address: u8,
+    sample_bytes_remaining: u16,
+    address_counter: u16,
+    sample_length: u8,
+    shift_register: u8,
+    bits_remaining: u8,
+    timer: u16,
+    timer_reload: u16,
+    output_level: u8,
+    output: i16,
+}
+
+impl DmcChannel {
+    pub fn clock(&mut self) {
+        if self.sample_bytes_remaining == 0 && self.is_automatic_playback_enabled {
+            self.address_counter = self.sample_address();
+            self.sample_bytes_remaining = self.sample_length();
+        }
+        if self.sample_buffer == 0x00 && self.sample_bytes_remaining > 0 && !self.was_dma_active {
+            self.is_dma_active = true;
+        }
+        if !self.is_dma_active && self.was_dma_active {
+            self.was_dma_active = false;
+            self.address_counter = self.address_counter.wrapping_add(1);
+            if self.address_counter == 0x0000 {
+                self.address_counter = 0x8000;
+            }
+            self.sample_bytes_remaining -= 1;
+            if self.sample_bytes_remaining == 0 {
+                if self.loop_flag {
+                    self.address_counter = self.sample_address();
+                    self.sample_bytes_remaining = self.sample_length();
+                } else if self.is_irq_enabled {
+                    // TODO
+                }
+            }
+        }
+        self.timer = self.timer.wrapping_sub(1) & 0x07FF;
+        if self.timer == 0x07FF {
+            if !self.silence_flag {
+                if self.shift_register & 0x01 != 0 && self.output_level <= 125 {
+                    self.output_level += 2;
+                } else if self.shift_register & 0x01 == 0 && self.output_level >= 2 {
+                    self.output_level -= 2;
+                }
+            }
+            self.shift_register >>= 1;
+            self.bits_remaining -= 1;
+            if self.bits_remaining == 0 {
+                self.bits_remaining = 8;
+                if self.sample_buffer == 0x00 {
+                    self.silence_flag = true;
+                } else {
+                    self.silence_flag = false;
+                    self.shift_register = self.sample_buffer;
+                    self.sample_buffer = 0x00;
+                }
+            }
+            let sample = (self.output_level as f32 / 127.0) * (VOLUME * 2) as f32;
+            self.output = sample as i16;
+            self.timer = self.timer_reload + 1;
+        }
+    }
+
+    pub fn sample_address(&self) -> u16 {
+        0xC000 | ((self.sample_address as u16) << 6)
+    }
+
+    pub fn sample_length(&self) -> u16 {
+        ((self.sample_length as u16) << 4) + 1
     }
 }
 
