@@ -1,4 +1,5 @@
 const BUFFER_SIZE: usize = 8 * 1024;
+const VOLUME: i16 = 2000;
 const LENGTH_COUNTER_MAP: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
     192, 24, 72, 26, 16, 28, 32, 30,
@@ -287,9 +288,9 @@ impl PulseChannel {
         if self.timer == 0x07FF {
             let bit_mux = 0x80 >> self.sequence_counter;
             let sample = if (self.duty_cycle & bit_mux) != 0 {
-                1000
+                VOLUME
             } else {
-                -1000
+                -VOLUME
             };
             let sample = if self.timer_reload > 8 { sample } else { 0 };
             self.output = sample;
@@ -354,10 +355,10 @@ impl TriangleChannel {
         if self.timer == 0x07FF {
             let sample = if self.sequence_counter > 15 {
                 let value = (self.sequence_counter - 16) as i16 - 8;
-                (value as f32 / 15.0) * 2000.0
+                (value as f32 / 15.0) * (VOLUME * 2) as f32
             } else {
                 let value = (15 - self.sequence_counter) as i16 - 8;
-                (value as f32 / 15.0) * 2000.0
+                (value as f32 / 15.0) * (VOLUME * 2) as f32
             } as i16;
             // Prevent ultrasonic frequencies from being played.
             let sample = if self.timer_reload > 2 { sample } else { 0 };
@@ -431,7 +432,7 @@ impl NoiseChannel {
             let sample = if self.shift_register & 0x01 != 0 {
                 0
             } else {
-                1000
+                VOLUME
             };
             self.output = sample;
             let feedback = (self.shift_register & 0x01)
