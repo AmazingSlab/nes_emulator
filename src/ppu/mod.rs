@@ -64,40 +64,13 @@ pub struct Ppu {
 
 impl Ppu {
     pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
-        // Allocate directly on the heap without going through the stack.
-        // This is necessary to avoid stack overflows in debug builds without having to sacrifice
-        // the array length guarantee, as without optimizations, Box::new([T; N]) allocates the
-        // array on the stack before moving to the heap.
-        //
-        // SAFETY: A raw pointer to memory previously owned by a Box is always safe to turn back
-        // into a Box. Casting to a fixed-size array pointer is safe because the Vec is guaranteed
-        // to have the same number of elements.
-        #[cfg(not(feature = "wasm"))]
-        let buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 3].into_boxed_slice())
-                as *mut [u8; 256 * 240 * 3])
-        };
-        #[cfg(feature = "wasm")]
-        let buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 4].into_boxed_slice())
-                as *mut [u8; 256 * 240 * 4])
-        };
+        let buffer = crate::new_boxed_array();
         #[cfg(feature = "memview")]
-        let nametable_buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 512 * 480 * 3].into_boxed_slice())
-                as *mut [u8; 512 * 480 * 3])
-        };
+        let nametable_buffer = crate::new_boxed_array();
         #[cfg(feature = "memview")]
-        let pattern_table_buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 256 * 128 * 3].into_boxed_slice())
-                as *mut [u8; 256 * 128 * 3])
-        };
+        let pattern_table_buffer = crate::new_boxed_array();
         #[cfg(feature = "memview")]
-        let oam_buffer = unsafe {
-            Box::from_raw(
-                Box::into_raw(vec![0u8; 64 * 64 * 3].into_boxed_slice()) as *mut [u8; 64 * 64 * 3]
-            )
-        };
+        let oam_buffer = crate::new_boxed_array();
 
         Self {
             control: PpuControl::default(),
@@ -113,9 +86,9 @@ impl Ppu {
             pattern_table_buffer,
             #[cfg(feature = "memview")]
             oam_buffer,
-            nametables: Box::new([0; 2048]),
-            palette_ram: Box::new([0; 32]),
-            oam: Box::new([0; 256]),
+            nametables: crate::new_boxed_array(),
+            palette_ram: crate::new_boxed_array(),
+            oam: crate::new_boxed_array(),
             oam_addr: 0,
             oam_dma_page: 0,
             cycle: 0,

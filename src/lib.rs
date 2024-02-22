@@ -146,3 +146,13 @@ impl std::fmt::Display for Controller {
         write!(f, "{right}{left}{down}{up}{start}{select}{b}{a}")
     }
 }
+
+/// Creates a new array directly on the heap without going through the stack.
+///
+/// This is a workaround to avoid stack overflows in debug builds, as without optimizations,
+/// `Box::new([T; N])` allocates the array on the stack before moving to the heap.
+pub fn new_boxed_array<T: Default + Clone, const N: usize>() -> Box<[T; N]> {
+    // SAFETY: A Box<[T]> obtained from a Vec<T> with N elements is guaranteed to be safe to cast to
+    // a Box<[T; N]>.
+    unsafe { Box::from_raw(Box::into_raw(vec![T::default(); N].into_boxed_slice()) as *mut [T; N]) }
+}

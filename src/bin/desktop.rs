@@ -136,7 +136,7 @@ pub fn main() {
     let apu = Rc::new(RefCell::new(Apu::new()));
     let bus = Bus::new(
         cpu.clone(),
-        Box::new([0; 2048]),
+        nes_emulator::new_boxed_array(),
         ppu.clone(),
         apu.clone(),
         cartridge,

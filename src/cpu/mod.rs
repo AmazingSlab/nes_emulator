@@ -1591,7 +1591,7 @@ mod tests {
         const HEADER: [u8; 16] = [0x4E, 0x45, 0x53, 0x1A, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
         // Load the program directly into internal RAM.
-        let mut ram = Box::new([0; 2048]);
+        let mut ram = crate::new_boxed_array();
         ram[0..program.len()].copy_from_slice(&program);
 
         // Construct a basic iNES ROM file to load.
@@ -1617,7 +1617,7 @@ mod tests {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
         let apu = Rc::new(RefCell::new(Apu::new()));
-        let _bus = Bus::new(cpu.clone(), Box::new([0; 2048]), ppu, apu, cartridge);
+        let _bus = Bus::new(cpu.clone(), crate::new_boxed_array(), ppu, apu, cartridge);
 
         let mut cpu = cpu.borrow_mut();
         cpu.reset();
