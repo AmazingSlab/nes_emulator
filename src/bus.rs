@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{concat_bytes, Apu, Cartridge, Controller, Cpu, Ppu};
+use crate::{concat_bytes, Apu, Cartridge, Controller, Cpu, Ppu, Savestate};
 
 pub struct Bus {
     cpu: Rc<RefCell<Cpu>>,
@@ -180,5 +180,19 @@ impl Bus {
     pub fn reset(cpu: Rc<RefCell<Cpu>>, ppu: Rc<RefCell<Ppu>>) {
         cpu.borrow_mut().reset();
         ppu.borrow_mut().reset();
+    }
+
+    pub fn apply_state(&mut self, state: Savestate) {
+        let cpu_state = state.cpu_state;
+        let ppu_state = state.ppu_state;
+        let mapper_state = state.mapper_state;
+        self.cpu.borrow_mut().apply_state(&cpu_state);
+        self.set_ram(cpu_state.ram);
+        self.ppu.borrow_mut().apply_state(ppu_state);
+        self.cartridge.borrow_mut().apply_state(mapper_state)
+    }
+
+    pub fn set_ram(&mut self, ram: Box<[u8; 2048]>) {
+        self.ram = ram;
     }
 }

@@ -5,7 +5,7 @@ use std::{
 
 mod color;
 
-use crate::{mapper::Mirroring, Bus, Cartridge};
+use crate::{mapper::Mirroring, savestate::PpuState, Bus, Cartridge};
 use color::Color;
 
 pub struct Ppu {
@@ -152,6 +152,23 @@ impl Ppu {
 
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
+    }
+
+    pub fn apply_state(&mut self, state: PpuState) {
+        self.nametables = state.nametables;
+        self.palette_ram = state.palette_ram;
+        self.oam = state.oam;
+
+        self.control.0 = state.control;
+        self.mask.0 = state.mask;
+        self.status.0 = state.status;
+        self.oam_addr = state.oam_addr;
+
+        self.fine_x_scroll = state.tile_x_offset;
+        self.addr_latch = state.addr_latch;
+        self.vram_addr = VramAddress::from(state.vram_addr);
+        self.temp_vram_addr = VramAddress::from(state.temp_vram_addr);
+        self.ppu_data_buffer = state.data_buffer;
     }
 
     #[cfg(not(feature = "wasm"))]

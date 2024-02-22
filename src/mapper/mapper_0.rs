@@ -1,3 +1,5 @@
+use crate::savestate::{self, MapperState};
+
 use super::{Mapper, Mirroring};
 
 pub struct Mapper0 {
@@ -77,6 +79,21 @@ impl Mapper for Mapper0 {
             Mirroring::Horizontal
         } else {
             Mirroring::Vertical
+        }
+    }
+
+    fn apply_state(&mut self, state: MapperState) {
+        let mut chr_ram = None;
+
+        for (description, section) in state {
+            match description {
+                "CHRR" => chr_ram = savestate::deserialize(section).ok(),
+                _ => println!("warn: unrecognized section {description}"),
+            }
+        }
+
+        if self.has_chr_ram {
+            self.chr_rom = chr_ram.unwrap_or_default();
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::is_bit_set;
+use crate::{is_bit_set, savestate::MapperState};
 
 use super::{Mapper, Mirroring};
 
@@ -153,6 +153,10 @@ impl Mapper for Mapper1 {
             3 => Mirroring::Horizontal,
             _ => unreachable!(),
         }
+    }
+
+    fn apply_state(&mut self, _state: MapperState) {
+        todo!()
     }
 }
 

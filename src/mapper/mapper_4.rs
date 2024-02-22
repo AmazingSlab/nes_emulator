@@ -1,3 +1,5 @@
+use crate::savestate::MapperState;
+
 use super::{Mapper, Mirroring};
 
 pub struct Mapper4 {
@@ -184,6 +186,10 @@ impl Mapper for Mapper4 {
         if self.irq_counter == 0 && self.is_irq_enabled {
             self.emit_irq = true;
         }
+    }
+
+    fn apply_state(&mut self, _state: MapperState) {
+        todo!()
     }
 }
 

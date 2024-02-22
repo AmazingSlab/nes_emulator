@@ -9,7 +9,7 @@ use std::{
 pub use cpu_instruction::CpuInstruction;
 pub use instruction::Instruction;
 
-use crate::{concat_bytes, high_byte, is_bit_set, low_byte, Bus};
+use crate::{concat_bytes, high_byte, is_bit_set, low_byte, savestate::CpuState, Bus};
 
 /// The 6502 CPU powering the NES.
 #[derive(Default)]
@@ -100,6 +100,15 @@ impl Cpu {
             self.cycle_wait = self.execute_next();
         }
         self.cycle_wait -= 1;
+    }
+
+    pub fn apply_state(&mut self, state: &CpuState) {
+        self.accumulator = state.accumulator;
+        self.x_register = state.x_register;
+        self.y_register = state.y_register;
+        self.program_counter = state.program_counter;
+        self.stack_pointer = state.stack_pointer;
+        self.status = Status::from_bits_retain(state.status);
     }
 }
 
