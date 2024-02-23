@@ -1,4 +1,4 @@
-use crate::savestate::MapperState;
+use crate::savestate::{self, MapperState};
 
 use super::{Mapper, Mirroring};
 
@@ -16,6 +16,7 @@ pub struct Mapper4 {
     is_irq_enabled: bool,
     emit_irq: bool,
     mirroring: Mirroring,
+    prg_ram_protect: u8,
 
     prg_banks: u8,
 }
@@ -43,6 +44,7 @@ impl Mapper4 {
             is_irq_enabled: false,
             emit_irq: false,
             mirroring: Mirroring::Vertical,
+            prg_ram_protect: 0x80,
 
             prg_banks: (prg_rom.len() / (8 * 1024)) as u8,
         })
@@ -137,7 +139,7 @@ impl Mapper for Mapper4 {
                         self.mirroring = Mirroring::Horizontal;
                     }
                 } else {
-                    // PRG RAM protect.
+                    self.prg_ram_protect = data & 0xC0;
                 }
             }
             0xC000..=0xDFFF => {
@@ -188,8 +190,53 @@ impl Mapper for Mapper4 {
         }
     }
 
-    fn apply_state(&mut self, _state: MapperState) {
-        todo!()
+    fn apply_state(&mut self, state: MapperState) {
+        for (description, section) in state {
+            match description {
+                "REGS" => self.bank_register = savestate::deserialize(section).unwrap_or_default(),
+                "CMD" => self.bank_select.0 = savestate::deserialize(section).unwrap_or_default(),
+                "A000" => {
+                    self.mirroring =
+                        if savestate::deserialize::<u8>(section).unwrap_or_default() == 0 {
+                            Mirroring::Vertical
+                        } else {
+                            Mirroring::Horizontal
+                        }
+                }
+                "A001" => {
+                    self.prg_ram_protect = savestate::deserialize(section).unwrap_or_default()
+                }
+                "IRQR" => {
+                    self.irq_reload = savestate::deserialize::<u8>(section).unwrap_or_default() != 0
+                }
+                "IRQC" => self.irq_counter = savestate::deserialize(section).unwrap_or_default(),
+                "IRQL" => self.irq_latch = savestate::deserialize(section).unwrap_or_default(),
+                "IRQA" => {
+                    self.is_irq_enabled =
+                        savestate::deserialize::<u8>(section).unwrap_or_default() != 0
+                }
+                "WRAM" => {
+                    let Ok(prg_ram) = savestate::deserialize::<Vec<u8>>(section) else {
+                        continue;
+                    };
+                    if prg_ram.len() == self.prg_ram.len() {
+                        self.prg_ram = prg_ram;
+                    }
+                }
+                "CHRR" => {
+                    if !self.has_chr_ram {
+                        continue;
+                    }
+                    let Ok(chr_ram) = savestate::deserialize::<Vec<u8>>(section) else {
+                        continue;
+                    };
+                    if chr_ram.len() == self.chr_rom.len() {
+                        self.chr_rom = chr_ram;
+                    }
+                }
+                _ => println!("warn: unrecognized section `{description}`"),
+            }
+        }
     }
 }
 
