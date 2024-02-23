@@ -83,17 +83,21 @@ impl Mapper for Mapper0 {
     }
 
     fn apply_state(&mut self, state: MapperState) {
-        let mut chr_ram = None;
-
         for (description, section) in state {
             match description {
-                "CHRR" => chr_ram = savestate::deserialize(section).ok(),
+                "CHRR" => {
+                    if !self.has_chr_ram {
+                        continue;
+                    }
+                    let Ok(chr_ram) = savestate::deserialize::<Vec<u8>>(section) else {
+                        continue;
+                    };
+                    if chr_ram.len() == self.chr_rom.len() {
+                        self.chr_rom = chr_ram;
+                    }
+                }
                 _ => println!("warn: unrecognized section `{description}`"),
             }
-        }
-
-        if self.has_chr_ram {
-            self.chr_rom = chr_ram.unwrap_or_default();
         }
     }
 }
