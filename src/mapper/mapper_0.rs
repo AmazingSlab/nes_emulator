@@ -88,7 +88,7 @@ impl Mapper for Mapper0 {
         for (description, section) in state {
             match description {
                 "CHRR" => chr_ram = savestate::deserialize(section).ok(),
-                _ => println!("warn: unrecognized section {description}"),
+                _ => println!("warn: unrecognized section `{description}`"),
             }
         }
 
