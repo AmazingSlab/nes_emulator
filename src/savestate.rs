@@ -1,6 +1,10 @@
 // TODO: Remove
 #![allow(unused)]
 
+use std::{borrow::Cow, io::Read};
+
+use flate2::read::ZlibDecoder;
+
 pub struct Savestate<'a> {
     pub(crate) header: Header,
     pub(crate) cpu_state: CpuState,
@@ -9,6 +13,13 @@ pub struct Savestate<'a> {
 }
 
 impl<'a> Savestate<'a> {
+    /// Parses an uncompressed FCEUX FCS savestate file.
+    ///
+    /// To parse a compressed savestate, see [Savestate::decompress].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file is malformed or compressed.
     pub fn new(bytes: &'a [u8]) -> Result<Self, String> {
         if bytes.len() < 3 || &bytes[0..3] != b"FCS" {
             return Err("not a savestate".into());
@@ -22,7 +33,7 @@ impl<'a> Savestate<'a> {
         let header = Header::new(header)?;
 
         if header.compressed_size.is_some() {
-            return Err("compressed savestates not supported".into());
+            return Err("savestate is compressed".into());
         }
 
         if rest.len() != header.file_size as usize {
@@ -62,6 +73,63 @@ impl<'a> Savestate<'a> {
             ppu_state: ppu_state.unwrap(),
             mapper_state: mapper_state.unwrap(),
         })
+    }
+
+    /// Decompresses a compressed FCEUX FCS savestate file.
+    ///
+    /// Use in conjunction with [Savestate::new] to parse the returned data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file is malformed.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use nes_emulator::Savestate;
+    ///
+    /// # fn main() -> Result<(), String> {
+    /// # let bytes = Vec::new();
+    /// let decompressed = Savestate::decompress(&bytes)?;
+    /// let savestate = Savestate::new(&decompressed)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn decompress(bytes: &'a [u8]) -> Result<Cow<'a, [u8]>, String> {
+        if bytes.len() < 3 || &bytes[0..3] != b"FCS" {
+            return Err("not a savestate".into());
+        }
+        if bytes.len() < 16 {
+            return Err("header ended unexpectedly".into());
+        }
+
+        let (header_bytes, rest) = bytes.split_at(16);
+
+        let header = Header::new(header_bytes)?;
+
+        match header.compressed_size {
+            Some(compressed_size) => {
+                if rest.len() != compressed_size as usize {
+                    return Err("compressed size doesn't match header".into());
+                }
+
+                let mut decoder = ZlibDecoder::new(rest);
+
+                let expected_output_size = header_bytes.len() + header.file_size as usize;
+                let mut output = vec![0u8; expected_output_size];
+
+                // Copy header into the output buffer while indicating that the data is
+                // uncompressed.
+                output[0..12].copy_from_slice(&header_bytes[0..12]);
+                output[12..16].fill(0xFF);
+
+                // Decompress data into the main body of the output buffer.
+                decoder.read(&mut output[16..]);
+
+                Ok(Cow::Owned(output))
+            }
+            None => Ok(Cow::Borrowed(bytes)),
+        }
     }
 }
 
