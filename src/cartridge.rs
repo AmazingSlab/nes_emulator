@@ -3,12 +3,13 @@ use std::{cell::RefCell, rc::Weak};
 use crate::{
     is_bit_set,
     mapper::{Mapper, Mapper0, Mapper1, Mapper4, Mirroring},
-    Bus,
+    Bus, GameGenie,
 };
 
 pub struct Cartridge {
     mapper: Box<dyn Mapper>,
     bus: Weak<RefCell<Bus>>,
+    game_genie: Option<GameGenie>,
 }
 
 impl Cartridge {
@@ -42,6 +43,7 @@ impl Cartridge {
         Ok(Self {
             mapper,
             bus: Weak::new(),
+            game_genie: None,
         })
     }
 
@@ -49,8 +51,21 @@ impl Cartridge {
         self.bus = bus;
     }
 
+    pub fn set_game_genie_codes<T: AsRef<str>>(&mut self, codes: &[T]) -> Result<(), String> {
+        self.game_genie = Some(GameGenie::new(codes)?);
+        Ok(())
+    }
+
     pub fn cpu_read(&self, addr: u16) -> u8 {
-        self.mapper.cpu_read(addr)
+        let value = self.mapper.cpu_read(addr);
+        if let Some(game_genie) = self.game_genie.as_ref() {
+            for code in game_genie.codes() {
+                if code.address == addr && (code.compare == Some(value) || code.compare.is_none()) {
+                    return code.value;
+                }
+            }
+        }
+        value
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {

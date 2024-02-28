@@ -2,6 +2,7 @@ mod apu;
 mod bus;
 mod cartridge;
 pub mod cpu;
+mod game_genie;
 pub mod mapper;
 pub mod ppu;
 mod replay;
@@ -13,6 +14,7 @@ pub use apu::Apu;
 pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use cpu::Cpu;
+pub use game_genie::{GameGenie, GameGenieCode};
 pub use ppu::Ppu;
 pub use replay::{InputCommand, Replay};
 
