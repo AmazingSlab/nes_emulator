@@ -206,15 +206,10 @@ impl Mapper for Mapper4 {
                 "A001" => {
                     self.prg_ram_protect = savestate::deserialize(section).unwrap_or_default()
                 }
-                "IRQR" => {
-                    self.irq_reload = savestate::deserialize::<u8>(section).unwrap_or_default() != 0
-                }
+                "IRQR" => self.irq_reload = savestate::deserialize(section).unwrap_or_default(),
                 "IRQC" => self.irq_counter = savestate::deserialize(section).unwrap_or_default(),
                 "IRQL" => self.irq_latch = savestate::deserialize(section).unwrap_or_default(),
-                "IRQA" => {
-                    self.is_irq_enabled =
-                        savestate::deserialize::<u8>(section).unwrap_or_default() != 0
-                }
+                "IRQA" => self.is_irq_enabled = savestate::deserialize(section).unwrap_or_default(),
                 "WRAM" => {
                     let Ok(prg_ram) = savestate::deserialize::<Vec<u8>>(section) else {
                         continue;

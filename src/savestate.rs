@@ -397,6 +397,12 @@ impl FromBytes for u32 {
     }
 }
 
+impl FromBytes for bool {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        Some(u8::from_bytes(bytes)? != 0)
+    }
+}
+
 impl<const N: usize> FromBytes for Box<[u8; N]> {
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         Some(Box::new(bytes.try_into().ok()?))
@@ -406,6 +412,18 @@ impl<const N: usize> FromBytes for Box<[u8; N]> {
 impl<const N: usize> FromBytes for [u8; N] {
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         bytes.try_into().ok()
+    }
+}
+
+impl<const N: usize> FromBytes for [bool; N] {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        bytes
+            .iter()
+            .copied()
+            .map(|b| b != 0)
+            .collect::<Vec<_>>()
+            .try_into()
+            .ok()
     }
 }
 
