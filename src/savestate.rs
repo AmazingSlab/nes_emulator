@@ -312,6 +312,21 @@ impl PpuState {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct ApuEnvelopeState {
+    pub(crate) divider_reload: u8,
+    pub(crate) divider: u8,
+    pub(crate) mode: u8,
+    pub(crate) decay_level: u8,
+}
+
+#[derive(Default)]
+pub(crate) struct ApuSweepState {
+    pub(crate) is_enabled: bool,
+    pub(crate) target_period: u16,
+    pub(crate) divider: u8,
+}
+
 pub struct ApuState {
     /// All values from 0x4000-0x400F for channels 1-4, unused bytes included.
     pub(crate) channel_data: [u8; 16],
@@ -321,35 +336,17 @@ pub struct ApuState {
     pub(crate) triangle_linear_counter_reload_flag: bool,
     pub(crate) triangle_linear_counter: u8,
 
-    pub(crate) pulse_1_envelope_divider_reload: u8,
-    pub(crate) pulse_2_envelope_divider_reload: u8,
-    pub(crate) noise_envelope_divider_reload: u8,
+    pub(crate) pulse_1_envelope: ApuEnvelopeState,
+    pub(crate) pulse_2_envelope: ApuEnvelopeState,
+    pub(crate) noise_envelope: ApuEnvelopeState,
 
-    pub(crate) pulse_1_envelope_mode: u8,
-    pub(crate) pulse_2_envelope_mode: u8,
-    pub(crate) noise_envelope_mode: u8,
-
-    pub(crate) pulse_1_envelope_divider: u8,
-    pub(crate) pulse_2_envelope_divider: u8,
-    pub(crate) noise_envelope_divider: u8,
-
-    pub(crate) pulse_1_envelope_decay_level: u8,
-    pub(crate) pulse_2_envelope_decay_level: u8,
-    pub(crate) noise_envelope_decay_level: u8,
+    pub(crate) pulse_1_sweep: ApuSweepState,
+    pub(crate) pulse_2_sweep: ApuSweepState,
 
     pub(crate) pulse_1_length_counter: u8,
     pub(crate) pulse_2_length_counter: u8,
     pub(crate) triangle_length_counter: u8,
     pub(crate) noise_length_counter: u8,
-
-    pub(crate) is_pulse_1_sweep_enabled: bool,
-    pub(crate) is_pulse_2_sweep_enabled: bool,
-
-    pub(crate) pulse_1_sweep_target_period: u16,
-    pub(crate) pulse_2_sweep_target_period: u16,
-
-    pub(crate) pulse_1_sweep_divider: u8,
-    pub(crate) pulse_2_sweep_divider: u8,
 }
 
 impl ApuState {
@@ -361,35 +358,17 @@ impl ApuState {
         let mut triangle_linear_counter_reload_flag = false;
         let mut triangle_linear_counter = 0;
 
-        let mut pulse_1_envelope_divider_reload = 0;
-        let mut pulse_2_envelope_divider_reload = 0;
-        let mut noise_envelope_divider_reload = 0;
+        let mut pulse_1_envelope = ApuEnvelopeState::default();
+        let mut pulse_2_envelope = ApuEnvelopeState::default();
+        let mut noise_envelope = ApuEnvelopeState::default();
 
-        let mut pulse_1_envelope_mode = 0;
-        let mut pulse_2_envelope_mode = 0;
-        let mut noise_envelope_mode = 0;
-
-        let mut pulse_1_envelope_divider = 0;
-        let mut pulse_2_envelope_divider = 0;
-        let mut noise_envelope_divider = 0;
-
-        let mut pulse_1_envelope_decay_level = 0;
-        let mut pulse_2_envelope_decay_level = 0;
-        let mut noise_envelope_decay_level = 0;
+        let mut pulse_1_sweep = ApuSweepState::default();
+        let mut pulse_2_sweep = ApuSweepState::default();
 
         let mut pulse_1_length_counter = 0;
         let mut pulse_2_length_counter = 0;
         let mut triangle_length_counter = 0;
         let mut noise_length_counter = 0;
-
-        let mut is_pulse_1_sweep_enabled = false;
-        let mut is_pulse_2_sweep_enabled = false;
-
-        let mut pulse_1_sweep_target_period = 0;
-        let mut pulse_2_sweep_target_period = 0;
-
-        let mut pulse_1_sweep_divider = 0;
-        let mut pulse_2_sweep_divider = 0;
 
         let subchunk = Subchunk::new(bytes)?;
         for (description, section) in subchunk {
@@ -402,21 +381,21 @@ impl ApuState {
                 "TRIM" => triangle_linear_counter_reload_flag = deserialize(section)?,
                 "TRIC" => triangle_linear_counter = deserialize(section)?,
 
-                "E0SP" => pulse_1_envelope_divider_reload = deserialize(section)?,
-                "E1SP" => pulse_2_envelope_divider_reload = deserialize(section)?,
-                "E2SP" => noise_envelope_divider_reload = deserialize(section)?,
+                "E0SP" => pulse_1_envelope.divider_reload = deserialize(section)?,
+                "E1SP" => pulse_2_envelope.divider_reload = deserialize(section)?,
+                "E2SP" => noise_envelope.divider_reload = deserialize(section)?,
 
-                "E0MO" => pulse_1_envelope_mode = deserialize(section)?,
-                "E1MO" => pulse_2_envelope_mode = deserialize(section)?,
-                "E2MO" => noise_envelope_mode = deserialize(section)?,
+                "E0MO" => pulse_1_envelope.mode = deserialize(section)?,
+                "E1MO" => pulse_2_envelope.mode = deserialize(section)?,
+                "E2MO" => noise_envelope.mode = deserialize(section)?,
 
-                "E0D1" => pulse_1_envelope_divider = deserialize(section)?,
-                "E1D1" => pulse_2_envelope_divider = deserialize(section)?,
-                "E2D1" => noise_envelope_divider = deserialize(section)?,
+                "E0D1" => pulse_1_envelope.divider = deserialize(section)?,
+                "E1D1" => pulse_2_envelope.divider = deserialize(section)?,
+                "E2D1" => noise_envelope.divider = deserialize(section)?,
 
-                "E0DV" => pulse_1_envelope_decay_level = deserialize(section)?,
-                "E1DV" => pulse_2_envelope_decay_level = deserialize(section)?,
-                "E2DV" => noise_envelope_decay_level = deserialize(section)?,
+                "E0DV" => pulse_1_envelope.decay_level = deserialize(section)?,
+                "E1DV" => pulse_2_envelope.decay_level = deserialize(section)?,
+                "E2DV" => noise_envelope.decay_level = deserialize(section)?,
 
                 // FCEUX treats these as u8 but stores them as i32 for some reason.
                 "LEN0" => pulse_1_length_counter = deserialize::<u32>(section)? as u8,
@@ -425,14 +404,14 @@ impl ApuState {
                 "LEN3" => noise_length_counter = deserialize::<u32>(section)? as u8,
 
                 "SWEE" => {
-                    [is_pulse_1_sweep_enabled, is_pulse_2_sweep_enabled] = deserialize(section)?
+                    [pulse_1_sweep.is_enabled, pulse_2_sweep.is_enabled] = deserialize(section)?
                 }
 
                 // FCEUX treats these as u16 but stores them as i32 for some reason.
-                "CRF1" => pulse_1_sweep_target_period = deserialize::<u32>(section)? as u16,
-                "CRF2" => pulse_2_sweep_target_period = deserialize::<u32>(section)? as u16,
+                "CRF1" => pulse_1_sweep.target_period = deserialize::<u32>(section)? as u16,
+                "CRF2" => pulse_2_sweep.target_period = deserialize::<u32>(section)? as u16,
 
-                "SWCT" => [pulse_1_sweep_divider, pulse_2_sweep_divider] = deserialize(section)?,
+                "SWCT" => [pulse_1_sweep.divider, pulse_2_sweep.divider] = deserialize(section)?,
                 "SIRQ" | "5ACC" | "5BIT" | "5ADD" | "5SIZ" | "5SHF" | "5HVD" | "5HVS" | "5SZL"
                 | "5ADL" | "5FMT" | "RWDA" => {} // TODO: DMC channel.
                 _ => println!("warn: unrecognized section `{description}`"),
@@ -447,35 +426,17 @@ impl ApuState {
             triangle_linear_counter_reload_flag,
             triangle_linear_counter,
 
-            pulse_1_envelope_divider_reload,
-            pulse_2_envelope_divider_reload,
-            noise_envelope_divider_reload,
+            pulse_1_envelope,
+            pulse_2_envelope,
+            noise_envelope,
 
-            pulse_1_envelope_mode,
-            pulse_2_envelope_mode,
-            noise_envelope_mode,
-
-            pulse_1_envelope_divider,
-            pulse_2_envelope_divider,
-            noise_envelope_divider,
-
-            pulse_1_envelope_decay_level,
-            pulse_2_envelope_decay_level,
-            noise_envelope_decay_level,
+            pulse_1_sweep,
+            pulse_2_sweep,
 
             pulse_1_length_counter,
             pulse_2_length_counter,
             triangle_length_counter,
             noise_length_counter,
-
-            is_pulse_1_sweep_enabled,
-            is_pulse_2_sweep_enabled,
-
-            pulse_1_sweep_target_period,
-            pulse_2_sweep_target_period,
-
-            pulse_1_sweep_divider,
-            pulse_2_sweep_divider,
         })
     }
 }

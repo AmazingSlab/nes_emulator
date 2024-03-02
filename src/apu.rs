@@ -1,4 +1,4 @@
-use crate::savestate::ApuState;
+use crate::savestate::{ApuEnvelopeState, ApuState, ApuSweepState};
 
 const BUFFER_SIZE: usize = 1024;
 const VOLUME: i16 = 2000;
@@ -278,39 +278,34 @@ impl Apu {
         self.triangle.linear_counter_reload_flag = state.triangle_linear_counter_reload_flag;
         self.triangle.linear_counter = state.triangle_linear_counter;
 
-        self.pulse_1.envelope.divider_reload = state.pulse_1_envelope_divider_reload;
-        self.pulse_2.envelope.divider_reload = state.pulse_2_envelope_divider_reload;
-        self.noise.envelope.divider_reload = state.noise_envelope_divider_reload;
+        self.pulse_1.length_counter_halt = state.pulse_1_envelope.mode & 0x02 != 0;
+        self.pulse_2.length_counter_halt = state.pulse_2_envelope.mode & 0x02 != 0;
+        self.noise.length_counter_halt = state.noise_envelope.mode & 0x02 != 0;
 
-        self.pulse_1.envelope.constant_volume_flag = state.pulse_1_envelope_mode & 0x01 != 0;
-        self.pulse_2.envelope.constant_volume_flag = state.pulse_2_envelope_mode & 0x01 != 0;
-        self.noise.envelope.constant_volume_flag = state.noise_envelope_mode & 0x01 != 0;
+        apply_envelope_state(&mut self.pulse_1.envelope, state.pulse_1_envelope);
+        apply_envelope_state(&mut self.pulse_2.envelope, state.pulse_2_envelope);
+        apply_envelope_state(&mut self.noise.envelope, state.noise_envelope);
 
-        self.pulse_1.length_counter_halt = state.pulse_1_envelope_mode & 0x02 != 0;
-        self.pulse_2.length_counter_halt = state.pulse_2_envelope_mode & 0x02 != 0;
-        self.noise.length_counter_halt = state.noise_envelope_mode & 0x02 != 0;
-
-        self.pulse_1.envelope.divider = state.pulse_1_envelope_divider;
-        self.pulse_2.envelope.divider = state.pulse_2_envelope_divider;
-        self.noise.envelope.divider = state.noise_envelope_divider;
-
-        self.pulse_1.envelope.decay_level = state.pulse_1_envelope_decay_level;
-        self.pulse_2.envelope.decay_level = state.pulse_2_envelope_decay_level;
-        self.noise.envelope.decay_level = state.noise_envelope_decay_level;
+        apply_sweep_state(&mut self.pulse_1.sweep, state.pulse_1_sweep);
+        apply_sweep_state(&mut self.pulse_2.sweep, state.pulse_2_sweep);
 
         self.pulse_1.length_counter = state.pulse_1_length_counter;
         self.pulse_2.length_counter = state.pulse_2_length_counter;
         self.triangle.length_counter = state.triangle_length_counter;
         self.noise.length_counter = state.noise_length_counter;
 
-        self.pulse_1.sweep.is_enabled = state.is_pulse_1_sweep_enabled;
-        self.pulse_2.sweep.is_enabled = state.is_pulse_2_sweep_enabled;
+        fn apply_envelope_state(target: &mut Envelope, source: ApuEnvelopeState) {
+            target.divider_reload = source.divider_reload;
+            target.divider = source.divider;
+            target.constant_volume_flag = source.mode & 0x01 != 0;
+            target.decay_level = source.decay_level;
+        }
 
-        self.pulse_1.sweep.target_period = state.pulse_1_sweep_target_period;
-        self.pulse_2.sweep.target_period = state.pulse_2_sweep_target_period;
-
-        self.pulse_1.sweep.divider = state.pulse_1_sweep_divider;
-        self.pulse_2.sweep.divider = state.pulse_2_sweep_divider;
+        fn apply_sweep_state(target: &mut Sweep, source: ApuSweepState) {
+            target.is_enabled = source.is_enabled;
+            target.target_period = source.target_period;
+            target.divider = source.divider;
+        }
     }
 }
 
