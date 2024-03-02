@@ -1,3 +1,5 @@
+use crate::savestate::ApuState;
+
 const BUFFER_SIZE: usize = 1024;
 const VOLUME: i16 = 2000;
 const LENGTH_COUNTER_MAP: [u8; 32] = [
@@ -246,6 +248,69 @@ impl Apu {
             }
             _ => (),
         }
+    }
+
+    pub fn apply_state(&mut self, state: ApuState) {
+        let channel_data = state.channel_data;
+
+        self.cpu_write(0x4000, channel_data[0x0]);
+        self.cpu_write(0x4001, channel_data[0x1]);
+        self.cpu_write(0x4002, channel_data[0x2]);
+        self.cpu_write(0x4003, channel_data[0x3]);
+
+        self.cpu_write(0x4004, channel_data[0x4]);
+        self.cpu_write(0x4005, channel_data[0x5]);
+        self.cpu_write(0x4006, channel_data[0x6]);
+        self.cpu_write(0x4007, channel_data[0x7]);
+
+        self.cpu_write(0x4008, channel_data[0x8]);
+        self.cpu_write(0x400A, channel_data[0xA]);
+        self.cpu_write(0x400B, channel_data[0xB]);
+
+        self.cpu_write(0x400C, channel_data[0xC]);
+        self.cpu_write(0x400E, channel_data[0xE]);
+        self.cpu_write(0x400F, channel_data[0xF]);
+
+        self.cpu_write(0x4015, state.channel_enables);
+        self.cpu_write(0x4017, state.frame_mode << 6);
+
+        self.noise.shift_register = state.noise_shift_register;
+        self.triangle.linear_counter_reload_flag = state.triangle_linear_counter_reload_flag;
+        self.triangle.linear_counter = state.triangle_linear_counter;
+
+        self.pulse_1.envelope.divider_reload = state.pulse_1_envelope_divider_reload;
+        self.pulse_2.envelope.divider_reload = state.pulse_2_envelope_divider_reload;
+        self.noise.envelope.divider_reload = state.noise_envelope_divider_reload;
+
+        self.pulse_1.envelope.constant_volume_flag = state.pulse_1_envelope_mode & 0x01 != 0;
+        self.pulse_2.envelope.constant_volume_flag = state.pulse_2_envelope_mode & 0x01 != 0;
+        self.noise.envelope.constant_volume_flag = state.noise_envelope_mode & 0x01 != 0;
+
+        self.pulse_1.length_counter_halt = state.pulse_1_envelope_mode & 0x02 != 0;
+        self.pulse_2.length_counter_halt = state.pulse_2_envelope_mode & 0x02 != 0;
+        self.noise.length_counter_halt = state.noise_envelope_mode & 0x02 != 0;
+
+        self.pulse_1.envelope.divider = state.pulse_1_envelope_divider;
+        self.pulse_2.envelope.divider = state.pulse_2_envelope_divider;
+        self.noise.envelope.divider = state.noise_envelope_divider;
+
+        self.pulse_1.envelope.decay_level = state.pulse_1_envelope_decay_level;
+        self.pulse_2.envelope.decay_level = state.pulse_2_envelope_decay_level;
+        self.noise.envelope.decay_level = state.noise_envelope_decay_level;
+
+        self.pulse_1.length_counter = state.pulse_1_length_counter;
+        self.pulse_2.length_counter = state.pulse_2_length_counter;
+        self.triangle.length_counter = state.triangle_length_counter;
+        self.noise.length_counter = state.noise_length_counter;
+
+        self.pulse_1.sweep.is_enabled = state.is_pulse_1_sweep_enabled;
+        self.pulse_2.sweep.is_enabled = state.is_pulse_2_sweep_enabled;
+
+        self.pulse_1.sweep.target_period = state.pulse_1_sweep_target_period;
+        self.pulse_2.sweep.target_period = state.pulse_2_sweep_target_period;
+
+        self.pulse_1.sweep.divider = state.pulse_1_sweep_divider;
+        self.pulse_2.sweep.divider = state.pulse_2_sweep_divider;
     }
 }
 

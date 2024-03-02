@@ -9,6 +9,7 @@ pub struct Savestate<'a> {
     pub(crate) header: Header,
     pub(crate) cpu_state: CpuState,
     pub(crate) ppu_state: PpuState,
+    pub(crate) apu_state: ApuState,
     pub(crate) mapper_state: MapperState<'a>,
 }
 
@@ -46,6 +47,7 @@ impl<'a> Savestate<'a> {
 
         let mut cpu_state = None;
         let mut ppu_state = None;
+        let mut apu_state = None;
         let mut mapper_state = None;
 
         let mut bytes = rest;
@@ -62,6 +64,7 @@ impl<'a> Savestate<'a> {
             match section_kind {
                 SectionChunkKind::Cpu => cpu_state = Some(CpuState::new(section)?),
                 SectionChunkKind::Ppu => ppu_state = Some(PpuState::new(section)?),
+                SectionChunkKind::Snd => apu_state = Some(ApuState::new(section)?),
                 SectionChunkKind::Extra => mapper_state = Some(MapperState::new(section)?),
                 _ => (), // TODO
             };
@@ -71,6 +74,7 @@ impl<'a> Savestate<'a> {
             header,
             cpu_state: cpu_state.unwrap(),
             ppu_state: ppu_state.unwrap(),
+            apu_state: apu_state.unwrap(),
             mapper_state: mapper_state.unwrap(),
         })
     }
@@ -304,6 +308,174 @@ impl PpuState {
             temp_vram_addr,
             data_buffer,
             general_latch,
+        })
+    }
+}
+
+pub struct ApuState {
+    /// All values from 0x4000-0x400F for channels 1-4, unused bytes included.
+    pub(crate) channel_data: [u8; 16],
+    pub(crate) channel_enables: u8,
+    pub(crate) frame_mode: u8,
+    pub(crate) noise_shift_register: u16,
+    pub(crate) triangle_linear_counter_reload_flag: bool,
+    pub(crate) triangle_linear_counter: u8,
+
+    pub(crate) pulse_1_envelope_divider_reload: u8,
+    pub(crate) pulse_2_envelope_divider_reload: u8,
+    pub(crate) noise_envelope_divider_reload: u8,
+
+    pub(crate) pulse_1_envelope_mode: u8,
+    pub(crate) pulse_2_envelope_mode: u8,
+    pub(crate) noise_envelope_mode: u8,
+
+    pub(crate) pulse_1_envelope_divider: u8,
+    pub(crate) pulse_2_envelope_divider: u8,
+    pub(crate) noise_envelope_divider: u8,
+
+    pub(crate) pulse_1_envelope_decay_level: u8,
+    pub(crate) pulse_2_envelope_decay_level: u8,
+    pub(crate) noise_envelope_decay_level: u8,
+
+    pub(crate) pulse_1_length_counter: u8,
+    pub(crate) pulse_2_length_counter: u8,
+    pub(crate) triangle_length_counter: u8,
+    pub(crate) noise_length_counter: u8,
+
+    pub(crate) is_pulse_1_sweep_enabled: bool,
+    pub(crate) is_pulse_2_sweep_enabled: bool,
+
+    pub(crate) pulse_1_sweep_target_period: u16,
+    pub(crate) pulse_2_sweep_target_period: u16,
+
+    pub(crate) pulse_1_sweep_divider: u8,
+    pub(crate) pulse_2_sweep_divider: u8,
+}
+
+impl ApuState {
+    pub fn new(bytes: &[u8]) -> Result<Self, String> {
+        let mut channel_data = None;
+        let mut channel_enables = 0;
+        let mut frame_mode = 0;
+        let mut noise_shift_register = 1;
+        let mut triangle_linear_counter_reload_flag = false;
+        let mut triangle_linear_counter = 0;
+
+        let mut pulse_1_envelope_divider_reload = 0;
+        let mut pulse_2_envelope_divider_reload = 0;
+        let mut noise_envelope_divider_reload = 0;
+
+        let mut pulse_1_envelope_mode = 0;
+        let mut pulse_2_envelope_mode = 0;
+        let mut noise_envelope_mode = 0;
+
+        let mut pulse_1_envelope_divider = 0;
+        let mut pulse_2_envelope_divider = 0;
+        let mut noise_envelope_divider = 0;
+
+        let mut pulse_1_envelope_decay_level = 0;
+        let mut pulse_2_envelope_decay_level = 0;
+        let mut noise_envelope_decay_level = 0;
+
+        let mut pulse_1_length_counter = 0;
+        let mut pulse_2_length_counter = 0;
+        let mut triangle_length_counter = 0;
+        let mut noise_length_counter = 0;
+
+        let mut is_pulse_1_sweep_enabled = false;
+        let mut is_pulse_2_sweep_enabled = false;
+
+        let mut pulse_1_sweep_target_period = 0;
+        let mut pulse_2_sweep_target_period = 0;
+
+        let mut pulse_1_sweep_divider = 0;
+        let mut pulse_2_sweep_divider = 0;
+
+        let subchunk = Subchunk::new(bytes)?;
+        for (description, section) in subchunk {
+            match description {
+                "FHCN" | "FCNT" => {} // Unsure what these counters are supposed to mean.
+                "PSG" => channel_data = Some(deserialize(section)?),
+                "ENCH" => channel_enables = deserialize(section)?,
+                "IQFM" => frame_mode = deserialize(section)?,
+                "NREG" => noise_shift_register = deserialize(section)?,
+                "TRIM" => triangle_linear_counter_reload_flag = deserialize(section)?,
+                "TRIC" => triangle_linear_counter = deserialize(section)?,
+
+                "E0SP" => pulse_1_envelope_divider_reload = deserialize(section)?,
+                "E1SP" => pulse_2_envelope_divider_reload = deserialize(section)?,
+                "E2SP" => noise_envelope_divider_reload = deserialize(section)?,
+
+                "E0MO" => pulse_1_envelope_mode = deserialize(section)?,
+                "E1MO" => pulse_2_envelope_mode = deserialize(section)?,
+                "E2MO" => noise_envelope_mode = deserialize(section)?,
+
+                "E0D1" => pulse_1_envelope_divider = deserialize(section)?,
+                "E1D1" => pulse_2_envelope_divider = deserialize(section)?,
+                "E2D1" => noise_envelope_divider = deserialize(section)?,
+
+                "E0DV" => pulse_1_envelope_decay_level = deserialize(section)?,
+                "E1DV" => pulse_2_envelope_decay_level = deserialize(section)?,
+                "E2DV" => noise_envelope_decay_level = deserialize(section)?,
+
+                // FCEUX treats these as u8 but stores them as i32 for some reason.
+                "LEN0" => pulse_1_length_counter = deserialize::<u32>(section)? as u8,
+                "LEN1" => pulse_2_length_counter = deserialize::<u32>(section)? as u8,
+                "LEN2" => triangle_length_counter = deserialize::<u32>(section)? as u8,
+                "LEN3" => noise_length_counter = deserialize::<u32>(section)? as u8,
+
+                "SWEE" => {
+                    [is_pulse_1_sweep_enabled, is_pulse_2_sweep_enabled] = deserialize(section)?
+                }
+
+                // FCEUX treats these as u16 but stores them as i32 for some reason.
+                "CRF1" => pulse_1_sweep_target_period = deserialize::<u32>(section)? as u16,
+                "CRF2" => pulse_2_sweep_target_period = deserialize::<u32>(section)? as u16,
+
+                "SWCT" => [pulse_1_sweep_divider, pulse_2_sweep_divider] = deserialize(section)?,
+                "SIRQ" | "5ACC" | "5BIT" | "5ADD" | "5SIZ" | "5SHF" | "5HVD" | "5HVS" | "5SZL"
+                | "5ADL" | "5FMT" | "RWDA" => {} // TODO: DMC channel.
+                _ => println!("warn: unrecognized section `{description}`"),
+            }
+        }
+
+        Ok(Self {
+            channel_data: channel_data.unwrap_or_default(),
+            channel_enables,
+            frame_mode,
+            noise_shift_register,
+            triangle_linear_counter_reload_flag,
+            triangle_linear_counter,
+
+            pulse_1_envelope_divider_reload,
+            pulse_2_envelope_divider_reload,
+            noise_envelope_divider_reload,
+
+            pulse_1_envelope_mode,
+            pulse_2_envelope_mode,
+            noise_envelope_mode,
+
+            pulse_1_envelope_divider,
+            pulse_2_envelope_divider,
+            noise_envelope_divider,
+
+            pulse_1_envelope_decay_level,
+            pulse_2_envelope_decay_level,
+            noise_envelope_decay_level,
+
+            pulse_1_length_counter,
+            pulse_2_length_counter,
+            triangle_length_counter,
+            noise_length_counter,
+
+            is_pulse_1_sweep_enabled,
+            is_pulse_2_sweep_enabled,
+
+            pulse_1_sweep_target_period,
+            pulse_2_sweep_target_period,
+
+            pulse_1_sweep_divider,
+            pulse_2_sweep_divider,
         })
     }
 }

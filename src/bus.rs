@@ -185,10 +185,13 @@ impl Bus {
     pub fn apply_state(&mut self, state: Savestate) {
         let cpu_state = state.cpu_state;
         let ppu_state = state.ppu_state;
+        let apu_state = state.apu_state;
         let mapper_state = state.mapper_state;
+
         self.cpu.borrow_mut().apply_state(&cpu_state);
         self.set_ram(cpu_state.ram);
         self.ppu.borrow_mut().apply_state(ppu_state);
+        self.apu.borrow_mut().apply_state(apu_state);
         self.cartridge.borrow_mut().apply_state(mapper_state)
     }
 
