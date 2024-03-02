@@ -72,10 +72,10 @@ impl<'a> Savestate<'a> {
 
         Ok(Self {
             header,
-            cpu_state: cpu_state.unwrap(),
-            ppu_state: ppu_state.unwrap(),
-            apu_state: apu_state.unwrap(),
-            mapper_state: mapper_state.unwrap(),
+            cpu_state: cpu_state.ok_or("missing cpu state")?,
+            ppu_state: ppu_state.ok_or("missing ppu state")?,
+            apu_state: apu_state.ok_or("missing apu state")?,
+            mapper_state: mapper_state.ok_or("missing mapper state")?,
         })
     }
 
