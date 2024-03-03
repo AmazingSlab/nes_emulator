@@ -9,7 +9,7 @@ use std::{
 pub use cpu_instruction::CpuInstruction;
 pub use instruction::Instruction;
 
-use crate::{concat_bytes, high_byte, is_bit_set, low_byte, Bus};
+use crate::{concat_bytes, high_byte, is_bit_set, low_byte, savestate::CpuState, Bus};
 
 /// The 6502 CPU powering the NES.
 #[derive(Default)]
@@ -100,6 +100,32 @@ impl Cpu {
             self.cycle_wait = self.execute_next();
         }
         self.cycle_wait -= 1;
+    }
+
+    pub fn apply_state(&mut self, state: &CpuState) {
+        self.accumulator = state.accumulator;
+        self.x_register = state.x_register;
+        self.y_register = state.y_register;
+        self.program_counter = state.program_counter;
+        self.stack_pointer = state.stack_pointer;
+        self.status = Status::from_bits_retain(state.status);
+    }
+
+    pub fn save_state(&self, ram: &[u8]) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&serialize(&self.accumulator, "A"));
+        buffer.extend_from_slice(&serialize(&self.x_register, "X"));
+        buffer.extend_from_slice(&serialize(&self.y_register, "Y"));
+        buffer.extend_from_slice(&serialize(&self.program_counter, "PC"));
+        buffer.extend_from_slice(&serialize(&self.stack_pointer, "S"));
+        buffer.extend_from_slice(&serialize(&self.status.bits(), "P"));
+        buffer.extend_from_slice(&serialize(&0u8, "DB")); // Currently unused.
+        buffer.extend_from_slice(&serialize(&ram, "RAM"));
+
+        buffer
     }
 }
 

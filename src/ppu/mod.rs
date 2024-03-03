@@ -5,7 +5,7 @@ use std::{
 
 mod color;
 
-use crate::{mapper::Mirroring, Bus, Cartridge};
+use crate::{mapper::Mirroring, savestate::PpuState, Bus, Cartridge};
 use color::Color;
 
 pub struct Ppu {
@@ -152,6 +152,45 @@ impl Ppu {
 
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
+    }
+
+    pub fn apply_state(&mut self, state: PpuState) {
+        self.nametables = state.nametables;
+        self.palette_ram = state.palette_ram;
+        self.oam = state.oam;
+
+        self.control.0 = state.control;
+        self.mask.0 = state.mask;
+        self.status.0 = state.status;
+        self.oam_addr = state.oam_addr;
+
+        self.fine_x_scroll = state.tile_x_offset;
+        self.addr_latch = state.addr_latch;
+        self.vram_addr = VramAddress::from(state.vram_addr);
+        self.temp_vram_addr = VramAddress::from(state.temp_vram_addr);
+        self.ppu_data_buffer = state.data_buffer;
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&serialize(&self.nametables, "NTAR"));
+        buffer.extend_from_slice(&serialize(&self.palette_ram, "PRAM"));
+        buffer.extend_from_slice(&serialize(&self.oam, "SPRA"));
+        buffer.extend_from_slice(&serialize(
+            &[self.control.0, self.mask.0, self.status.0, self.oam_addr],
+            "PPUR",
+        ));
+        buffer.extend_from_slice(&serialize(&self.fine_x_scroll, "XOFF"));
+        buffer.extend_from_slice(&serialize(&self.addr_latch, "VTGL"));
+        buffer.extend_from_slice(&serialize(&self.vram_addr.0, "RADD"));
+        buffer.extend_from_slice(&serialize(&self.temp_vram_addr.0, "TADD"));
+        buffer.extend_from_slice(&serialize(&self.ppu_data_buffer, "VBUF"));
+        buffer.extend_from_slice(&serialize(&0u8, "PGEN")); // Unused debug variable.
+
+        buffer
     }
 
     #[cfg(not(feature = "wasm"))]

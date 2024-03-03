@@ -6,6 +6,7 @@ mod game_genie;
 pub mod mapper;
 pub mod ppu;
 mod replay;
+pub mod savestate;
 
 #[cfg(feature = "wasm")]
 use std::{cell::RefCell, rc::Rc};
@@ -17,6 +18,7 @@ pub use cpu::Cpu;
 pub use game_genie::{GameGenie, GameGenieCode};
 pub use ppu::Ppu;
 pub use replay::{InputCommand, Replay};
+pub use savestate::Savestate;
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -55,6 +57,19 @@ impl Nes {
             self.clock();
         }
         self.ppu.borrow_mut().is_frame_ready = false;
+    }
+
+    pub fn apply_state(&self, state: &[u8]) -> Result<(), String> {
+        let decompressed = Savestate::decompress(state)?;
+        let savestate = Savestate::new(&decompressed)?;
+
+        self.bus.borrow_mut().apply_state(savestate);
+
+        Ok(())
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.bus.borrow().save_state()
     }
 
     pub fn image_buffer_raw(&self) -> *const u8 {

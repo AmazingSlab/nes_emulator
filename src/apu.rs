@@ -1,3 +1,5 @@
+use crate::savestate::{ApuEnvelopeState, ApuState, ApuSweepState};
+
 const BUFFER_SIZE: usize = 1024;
 const VOLUME: i16 = 2000;
 const LENGTH_COUNTER_MAP: [u8; 32] = [
@@ -11,6 +13,8 @@ const NOISE_TIMER_MAP: [u16; 16] = [
 #[derive(Default)]
 pub struct Apu {
     audio_buffer: Vec<f32>,
+
+    channel_data: Box<[u8; 16]>,
 
     pulse_1: PulseChannel,
     pulse_2: PulseChannel,
@@ -131,6 +135,10 @@ impl Apu {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
+        if let 0x4000..=0x400F = addr {
+            self.channel_data[addr as usize & 0xF] = data;
+        }
+
         match addr {
             0x4000 => {
                 self.pulse_1.duty_cycle = match (data >> 6) & 0x03 {
@@ -246,6 +254,137 @@ impl Apu {
             }
             _ => (),
         }
+    }
+
+    pub fn apply_state(&mut self, state: ApuState) {
+        let channel_data = state.channel_data;
+
+        self.cpu_write(0x4000, channel_data[0x0]);
+        self.cpu_write(0x4001, channel_data[0x1]);
+        self.cpu_write(0x4002, channel_data[0x2]);
+        self.cpu_write(0x4003, channel_data[0x3]);
+
+        self.cpu_write(0x4004, channel_data[0x4]);
+        self.cpu_write(0x4005, channel_data[0x5]);
+        self.cpu_write(0x4006, channel_data[0x6]);
+        self.cpu_write(0x4007, channel_data[0x7]);
+
+        self.cpu_write(0x4008, channel_data[0x8]);
+        self.cpu_write(0x400A, channel_data[0xA]);
+        self.cpu_write(0x400B, channel_data[0xB]);
+
+        self.cpu_write(0x400C, channel_data[0xC]);
+        self.cpu_write(0x400E, channel_data[0xE]);
+        self.cpu_write(0x400F, channel_data[0xF]);
+
+        self.cpu_write(0x4015, state.channel_enables);
+        self.cpu_write(0x4017, state.frame_mode << 6);
+
+        self.noise.shift_register = state.noise_shift_register;
+        self.triangle.linear_counter_reload_flag = state.triangle_linear_counter_reload_flag;
+        self.triangle.linear_counter = state.triangle_linear_counter;
+
+        self.pulse_1.length_counter_halt = state.pulse_1_envelope.mode & 0x02 != 0;
+        self.pulse_2.length_counter_halt = state.pulse_2_envelope.mode & 0x02 != 0;
+        self.noise.length_counter_halt = state.noise_envelope.mode & 0x02 != 0;
+
+        apply_envelope_state(&mut self.pulse_1.envelope, state.pulse_1_envelope);
+        apply_envelope_state(&mut self.pulse_2.envelope, state.pulse_2_envelope);
+        apply_envelope_state(&mut self.noise.envelope, state.noise_envelope);
+
+        apply_sweep_state(&mut self.pulse_1.sweep, state.pulse_1_sweep);
+        apply_sweep_state(&mut self.pulse_2.sweep, state.pulse_2_sweep);
+
+        self.pulse_1.length_counter = state.pulse_1_length_counter;
+        self.pulse_2.length_counter = state.pulse_2_length_counter;
+        self.triangle.length_counter = state.triangle_length_counter;
+        self.noise.length_counter = state.noise_length_counter;
+
+        fn apply_envelope_state(target: &mut Envelope, source: ApuEnvelopeState) {
+            target.divider_reload = source.divider_reload;
+            target.divider = source.divider;
+            target.constant_volume_flag = source.mode & 0x01 != 0;
+            target.decay_level = source.decay_level;
+        }
+
+        fn apply_sweep_state(target: &mut Sweep, source: ApuSweepState) {
+            target.is_enabled = source.is_enabled;
+            target.target_period = source.target_period;
+            target.divider = source.divider;
+        }
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        let channel_enables = self.pulse_1.is_enabled as u8
+            | (self.pulse_2.is_enabled as u8) << 1
+            | (self.triangle.is_enabled as u8) << 2
+            | (self.noise.is_enabled as u8) << 3;
+
+        let frame_mode =
+            self.disable_frame_interrupt as u8 | (self.use_five_frame_sequence as u8) << 1;
+
+        let pulse_1_envelope_mode = self.pulse_1.envelope.constant_volume_flag as u8
+            | (self.pulse_1.length_counter_halt as u8) << 1;
+        let pulse_2_envelope_mode = self.pulse_2.envelope.constant_volume_flag as u8
+            | (self.pulse_2.length_counter_halt as u8) << 1;
+        let noise_envelope_mode = self.noise.envelope.constant_volume_flag as u8
+            | (self.noise.length_counter_halt as u8) << 1;
+
+        buffer.extend_from_slice(&serialize(&self.channel_data, "PSG"));
+        buffer.extend_from_slice(&serialize(&channel_enables, "ENCH"));
+        buffer.extend_from_slice(&serialize(&frame_mode, "IQFM"));
+        buffer.extend_from_slice(&serialize(&self.noise.shift_register, "NREG"));
+        buffer.extend_from_slice(&serialize(
+            &self.triangle.linear_counter_reload_flag,
+            "TRIM",
+        ));
+        buffer.extend_from_slice(&serialize(&self.triangle.linear_counter, "TRIC"));
+
+        buffer.extend_from_slice(&serialize(&self.pulse_1.envelope.divider_reload, "E0SP"));
+        buffer.extend_from_slice(&serialize(&self.pulse_2.envelope.divider_reload, "E1SP"));
+        buffer.extend_from_slice(&serialize(&self.noise.envelope.divider_reload, "E2SP"));
+
+        buffer.extend_from_slice(&serialize(&pulse_1_envelope_mode, "E0MO"));
+        buffer.extend_from_slice(&serialize(&pulse_2_envelope_mode, "E1MO"));
+        buffer.extend_from_slice(&serialize(&noise_envelope_mode, "E2MO"));
+
+        buffer.extend_from_slice(&serialize(&self.pulse_1.envelope.divider, "E0D1"));
+        buffer.extend_from_slice(&serialize(&self.pulse_2.envelope.divider, "E1D1"));
+        buffer.extend_from_slice(&serialize(&self.noise.envelope.divider, "E2D1"));
+
+        buffer.extend_from_slice(&serialize(&self.pulse_1.envelope.decay_level, "E0DV"));
+        buffer.extend_from_slice(&serialize(&self.pulse_2.envelope.decay_level, "E1DV"));
+        buffer.extend_from_slice(&serialize(&self.noise.envelope.decay_level, "E2DV"));
+
+        buffer.extend_from_slice(&serialize(&(self.pulse_1.length_counter as u32), "LEN0"));
+        buffer.extend_from_slice(&serialize(&(self.pulse_2.length_counter as u32), "LEN1"));
+        buffer.extend_from_slice(&serialize(&(self.triangle.length_counter as u32), "LEN2"));
+        buffer.extend_from_slice(&serialize(&(self.noise.length_counter as u32), "LEN3"));
+
+        buffer.extend_from_slice(&serialize(
+            &[self.pulse_1.sweep.is_enabled, self.pulse_2.sweep.is_enabled],
+            "SWEE",
+        ));
+
+        buffer.extend_from_slice(&serialize(
+            &(self.pulse_1.sweep.target_period as u32),
+            "CRF1",
+        ));
+        buffer.extend_from_slice(&serialize(
+            &(self.pulse_2.sweep.target_period as u32),
+            "CRF2",
+        ));
+
+        buffer.extend_from_slice(&serialize(
+            &[self.pulse_1.sweep.divider, self.pulse_2.sweep.divider],
+            "SWCT",
+        ));
+
+        buffer
     }
 }
 

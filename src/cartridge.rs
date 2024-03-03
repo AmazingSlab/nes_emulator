@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Weak};
 use crate::{
     is_bit_set,
     mapper::{Mapper, Mapper0, Mapper1, Mapper4, Mirroring},
+    savestate::MapperState,
     Bus, GameGenie,
 };
 
@@ -89,6 +90,14 @@ impl Cartridge {
         if self.mapper.check_irq() {
             self.bus.upgrade().unwrap().borrow_mut().request_irq();
         }
+    }
+
+    pub fn apply_state(&mut self, state: MapperState) {
+        self.mapper.apply_state(state);
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.mapper.save_state()
     }
 }
 

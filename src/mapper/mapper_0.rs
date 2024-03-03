@@ -1,3 +1,5 @@
+use crate::savestate::{self, MapperState};
+
 use super::{Mapper, Mirroring};
 
 pub struct Mapper0 {
@@ -78,5 +80,36 @@ impl Mapper for Mapper0 {
         } else {
             Mirroring::Vertical
         }
+    }
+
+    fn apply_state(&mut self, state: MapperState) {
+        for (description, section) in state {
+            match description {
+                "CHRR" => {
+                    if !self.has_chr_ram {
+                        continue;
+                    }
+                    let Ok(chr_ram) = savestate::deserialize::<Vec<u8>>(section) else {
+                        continue;
+                    };
+                    if chr_ram.len() == self.chr_rom.len() {
+                        self.chr_rom = chr_ram;
+                    }
+                }
+                _ => println!("warn: unrecognized section `{description}`"),
+            }
+        }
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        if self.has_chr_ram {
+            buffer.extend_from_slice(&serialize(&self.chr_rom, "CHRR"));
+        }
+
+        buffer
     }
 }
