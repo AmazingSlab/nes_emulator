@@ -36,6 +36,7 @@ pub struct Nes {
     cpu: Rc<RefCell<Cpu>>,
     ppu: Rc<RefCell<Ppu>>,
     apu: Rc<RefCell<Apu>>,
+    cartridge: Rc<RefCell<Cartridge>>,
 }
 
 #[cfg(feature = "wasm")]
@@ -51,11 +52,17 @@ impl Nes {
             crate::new_boxed_array(),
             ppu.clone(),
             apu.clone(),
-            cartridge,
+            cartridge.clone(),
         );
         cpu.borrow_mut().reset();
 
-        Ok(Self { bus, cpu, ppu, apu })
+        Ok(Self {
+            bus,
+            cpu,
+            ppu,
+            apu,
+            cartridge,
+        })
     }
 
     pub fn tick(&self) {
@@ -76,6 +83,11 @@ impl Nes {
 
     pub fn save_state(&self) -> Vec<u8> {
         self.bus.borrow().save_state()
+    }
+
+    pub fn set_game_genie_codes(&self, codes: Vec<String>) -> Result<(), String> {
+        self.cartridge.borrow_mut().set_game_genie_codes(&codes)?;
+        Ok(())
     }
 
     pub fn image_buffer_raw(&self) -> *const u8 {
