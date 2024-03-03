@@ -1,9 +1,12 @@
 // TODO: Remove
 #![allow(unused)]
 
-use std::{borrow::Cow, io::Read};
+use std::{
+    borrow::Cow,
+    io::{Read, Write},
+};
 
-use flate2::read::ZlibDecoder;
+use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 
 pub struct Savestate<'a> {
     pub(crate) header: Header,
@@ -135,6 +138,56 @@ impl<'a> Savestate<'a> {
             None => Ok(Cow::Borrowed(bytes)),
         }
     }
+
+    /// Saves the current system state to a new FCEUX FCS savestate file.
+    ///
+    /// This is an associated function to avoid having to copy data into the state structs, only to
+    /// then copy out of them immediately after. Use the save methods on the various system
+    /// components to obtain the necessary data.
+    pub fn save(cpu: &[u8], ppu: &[u8], apu: &[u8], mapper: &[u8]) -> Vec<u8> {
+        // Numeric for FCEUX version 2.6.6.
+        const VERSION: u32 = 20606;
+        const TOTAL_HEADER_SIZE: usize = 5 * 4;
+
+        let mut input_buffer = Vec::with_capacity(
+            TOTAL_HEADER_SIZE + cpu.len() + ppu.len() + apu.len() + mapper.len(),
+        );
+
+        input_buffer.push(SectionChunkKind::Cpu.into());
+        input_buffer.extend_from_slice(&(cpu.len() as u32).to_le_bytes());
+        input_buffer.extend_from_slice(cpu);
+
+        input_buffer.push(SectionChunkKind::Ppu.into());
+        input_buffer.extend_from_slice(&(ppu.len() as u32).to_le_bytes());
+        input_buffer.extend_from_slice(ppu);
+
+        input_buffer.push(SectionChunkKind::Snd.into());
+        input_buffer.extend_from_slice(&(apu.len() as u32).to_le_bytes());
+        input_buffer.extend_from_slice(apu);
+
+        input_buffer.push(SectionChunkKind::Extra.into());
+        input_buffer.extend_from_slice(&(mapper.len() as u32).to_le_bytes());
+        input_buffer.extend_from_slice(mapper);
+
+        let uncompressed_length = input_buffer.len() as u32;
+
+        let mut buffer = Vec::new();
+        buffer.extend_from_slice(b"FCSX");
+        buffer.extend_from_slice(&uncompressed_length.to_le_bytes());
+        buffer.extend_from_slice(&VERSION.to_le_bytes());
+        buffer.extend_from_slice(&[0xFF; 4]);
+
+        let mut encoder = ZlibEncoder::new(buffer, Compression::best());
+        encoder.write_all(&input_buffer);
+
+        let mut output_buffer = encoder
+            .finish()
+            .expect("writing to a Vec should never fail");
+        let compressed_size = output_buffer.len() as u32 - 16;
+        output_buffer[12..16].copy_from_slice(&compressed_size.to_le_bytes());
+
+        output_buffer
+    }
 }
 
 #[derive(Debug)]
@@ -187,6 +240,20 @@ impl SectionChunkKind {
             5 => Self::Snd,
             16 => Self::Extra,
             _ => Self::Unknown,
+        }
+    }
+}
+
+impl From<SectionChunkKind> for u8 {
+    fn from(value: SectionChunkKind) -> Self {
+        match value {
+            SectionChunkKind::Cpu => 1,
+            SectionChunkKind::Cpuc => 2,
+            SectionChunkKind::Ppu => 3,
+            SectionChunkKind::Ctlr => 4,
+            SectionChunkKind::Snd => 5,
+            SectionChunkKind::Extra => 16,
+            SectionChunkKind::Unknown => 0,
         }
     }
 }
@@ -508,8 +575,30 @@ pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, String> {
     T::from_bytes(bytes).ok_or_else(|| "invalid section size".into())
 }
 
+pub fn serialize<T: ToBytes>(value: &T, description: &str) -> Vec<u8> {
+    const SECTION_HEADER_SIZE: usize = 8;
+
+    let mut description = format!("{description:\0<4}");
+    description.truncate(4);
+
+    let data = value.to_bytes();
+    let data_length = data.len();
+
+    let mut buffer = Vec::with_capacity(SECTION_HEADER_SIZE + data_length);
+
+    buffer.extend_from_slice(description.as_bytes());
+    buffer.extend_from_slice(&(data_length as u32).to_le_bytes());
+    buffer.extend_from_slice(&data);
+
+    buffer
+}
+
 pub trait FromBytes: Sized {
     fn from_bytes(bytes: &[u8]) -> Option<Self>;
+}
+
+pub trait ToBytes {
+    fn to_bytes(&self) -> Vec<u8>;
 }
 
 impl FromBytes for u8 {
@@ -563,5 +652,59 @@ impl<const N: usize> FromBytes for [bool; N] {
 impl FromBytes for Vec<u8> {
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         Some(bytes.into())
+    }
+}
+
+impl ToBytes for u8 {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+}
+
+impl ToBytes for u16 {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+}
+
+impl ToBytes for u32 {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_le_bytes().to_vec()
+    }
+}
+
+impl ToBytes for bool {
+    fn to_bytes(&self) -> Vec<u8> {
+        (*self as u8).to_le_bytes().to_vec()
+    }
+}
+
+impl<const N: usize> ToBytes for Box<[u8; N]> {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_vec()
+    }
+}
+
+impl<const N: usize> ToBytes for [u8; N] {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_vec()
+    }
+}
+
+impl ToBytes for &[u8] {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_vec()
+    }
+}
+
+impl<const N: usize> ToBytes for [bool; N] {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.iter().copied().map(|b| b as u8).collect()
+    }
+}
+
+impl ToBytes for Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_owned()
     }
 }

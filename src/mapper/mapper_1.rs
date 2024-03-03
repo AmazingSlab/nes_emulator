@@ -198,6 +198,31 @@ impl Mapper for Mapper1 {
             }
         }
     }
+
+    fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        if self.has_chr_ram {
+            buffer.extend_from_slice(&serialize(&self.chr_rom, "CHRR"));
+        }
+
+        buffer.extend_from_slice(&serialize(&self.prg_ram, "WRAM"));
+        buffer.extend_from_slice(&serialize(
+            &[
+                self.control.0,
+                self.chr_bank_0,
+                self.chr_bank_1,
+                self.prg_bank,
+            ],
+            "DREG",
+        ));
+        buffer.extend_from_slice(&serialize(&self.shift, "BFFR"));
+        buffer.extend_from_slice(&serialize(&self.shift_count, "BFRS"));
+
+        buffer
+    }
 }
 
 #[bitfield_struct::bitfield(u8)]

@@ -100,4 +100,16 @@ impl Mapper for Mapper0 {
             }
         }
     }
+
+    fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        if self.has_chr_ram {
+            buffer.extend_from_slice(&serialize(&self.chr_rom, "CHRR"));
+        }
+
+        buffer
+    }
 }

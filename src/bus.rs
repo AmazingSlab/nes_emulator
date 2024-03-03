@@ -195,6 +195,15 @@ impl Bus {
         self.cartridge.borrow_mut().apply_state(mapper_state)
     }
 
+    pub fn save_state(&self) -> Vec<u8> {
+        let cpu_state = self.cpu.borrow().save_state(self.ram.as_ref());
+        let ppu_state = self.ppu.borrow().save_state();
+        let apu_state = self.apu.borrow().save_state();
+        let mapper_state = self.cartridge.borrow().save_state();
+
+        Savestate::save(&cpu_state, &ppu_state, &apu_state, &mapper_state)
+    }
+
     pub fn set_ram(&mut self, ram: Box<[u8; 2048]>) {
         self.ram = ram;
     }

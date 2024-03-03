@@ -14,6 +14,8 @@ const NOISE_TIMER_MAP: [u16; 16] = [
 pub struct Apu {
     audio_buffer: Vec<f32>,
 
+    channel_data: Box<[u8; 16]>,
+
     pulse_1: PulseChannel,
     pulse_2: PulseChannel,
     triangle: TriangleChannel,
@@ -133,6 +135,10 @@ impl Apu {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
+        if let 0x4000..=0x400F = addr {
+            self.channel_data[addr as usize & 0xF] = data;
+        }
+
         match addr {
             0x4000 => {
                 self.pulse_1.duty_cycle = match (data >> 6) & 0x03 {
@@ -306,6 +312,79 @@ impl Apu {
             target.target_period = source.target_period;
             target.divider = source.divider;
         }
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        let channel_enables = self.pulse_1.is_enabled as u8
+            | (self.pulse_2.is_enabled as u8) << 1
+            | (self.triangle.is_enabled as u8) << 2
+            | (self.noise.is_enabled as u8) << 3;
+
+        let frame_mode =
+            self.disable_frame_interrupt as u8 | (self.use_five_frame_sequence as u8) << 1;
+
+        let pulse_1_envelope_mode = self.pulse_1.envelope.constant_volume_flag as u8
+            | (self.pulse_1.length_counter_halt as u8) << 1;
+        let pulse_2_envelope_mode = self.pulse_2.envelope.constant_volume_flag as u8
+            | (self.pulse_2.length_counter_halt as u8) << 1;
+        let noise_envelope_mode = self.noise.envelope.constant_volume_flag as u8
+            | (self.noise.length_counter_halt as u8) << 1;
+
+        buffer.extend_from_slice(&serialize(&self.channel_data, "PSG"));
+        buffer.extend_from_slice(&serialize(&channel_enables, "ENCH"));
+        buffer.extend_from_slice(&serialize(&frame_mode, "IQFM"));
+        buffer.extend_from_slice(&serialize(&self.noise.shift_register, "NREG"));
+        buffer.extend_from_slice(&serialize(
+            &self.triangle.linear_counter_reload_flag,
+            "TRIM",
+        ));
+        buffer.extend_from_slice(&serialize(&self.triangle.linear_counter, "TRIC"));
+
+        buffer.extend_from_slice(&serialize(&self.pulse_1.envelope.divider_reload, "E0SP"));
+        buffer.extend_from_slice(&serialize(&self.pulse_2.envelope.divider_reload, "E1SP"));
+        buffer.extend_from_slice(&serialize(&self.noise.envelope.divider_reload, "E2SP"));
+
+        buffer.extend_from_slice(&serialize(&pulse_1_envelope_mode, "E0MO"));
+        buffer.extend_from_slice(&serialize(&pulse_2_envelope_mode, "E1MO"));
+        buffer.extend_from_slice(&serialize(&noise_envelope_mode, "E2MO"));
+
+        buffer.extend_from_slice(&serialize(&self.pulse_1.envelope.divider, "E0D1"));
+        buffer.extend_from_slice(&serialize(&self.pulse_2.envelope.divider, "E1D1"));
+        buffer.extend_from_slice(&serialize(&self.noise.envelope.divider, "E2D1"));
+
+        buffer.extend_from_slice(&serialize(&self.pulse_1.envelope.decay_level, "E0DV"));
+        buffer.extend_from_slice(&serialize(&self.pulse_2.envelope.decay_level, "E1DV"));
+        buffer.extend_from_slice(&serialize(&self.noise.envelope.decay_level, "E2DV"));
+
+        buffer.extend_from_slice(&serialize(&(self.pulse_1.length_counter as u32), "LEN0"));
+        buffer.extend_from_slice(&serialize(&(self.pulse_2.length_counter as u32), "LEN1"));
+        buffer.extend_from_slice(&serialize(&(self.triangle.length_counter as u32), "LEN2"));
+        buffer.extend_from_slice(&serialize(&(self.noise.length_counter as u32), "LEN3"));
+
+        buffer.extend_from_slice(&serialize(
+            &[self.pulse_1.sweep.is_enabled, self.pulse_2.sweep.is_enabled],
+            "SWEE",
+        ));
+
+        buffer.extend_from_slice(&serialize(
+            &(self.pulse_1.sweep.target_period as u32),
+            "CRF1",
+        ));
+        buffer.extend_from_slice(&serialize(
+            &(self.pulse_2.sweep.target_period as u32),
+            "CRF2",
+        ));
+
+        buffer.extend_from_slice(&serialize(
+            &[self.pulse_1.sweep.divider, self.pulse_2.sweep.divider],
+            "SWCT",
+        ));
+
+        buffer
     }
 }
 

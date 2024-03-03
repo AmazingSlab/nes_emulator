@@ -171,6 +171,28 @@ impl Ppu {
         self.ppu_data_buffer = state.data_buffer;
     }
 
+    pub fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&serialize(&self.nametables, "NTAR"));
+        buffer.extend_from_slice(&serialize(&self.palette_ram, "PRAM"));
+        buffer.extend_from_slice(&serialize(&self.oam, "SPRA"));
+        buffer.extend_from_slice(&serialize(
+            &[self.control.0, self.mask.0, self.status.0, self.oam_addr],
+            "PPUR",
+        ));
+        buffer.extend_from_slice(&serialize(&self.fine_x_scroll, "XOFF"));
+        buffer.extend_from_slice(&serialize(&self.addr_latch, "VTGL"));
+        buffer.extend_from_slice(&serialize(&self.vram_addr.0, "RADD"));
+        buffer.extend_from_slice(&serialize(&self.temp_vram_addr.0, "TADD"));
+        buffer.extend_from_slice(&serialize(&self.ppu_data_buffer, "VBUF"));
+        buffer.extend_from_slice(&serialize(&0u8, "PGEN")); // Unused debug variable.
+
+        buffer
+    }
+
     #[cfg(not(feature = "wasm"))]
     pub fn buffer(&self) -> &[u8] {
         self.buffer.as_ref()

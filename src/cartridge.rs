@@ -80,6 +80,10 @@ impl Cartridge {
     pub fn apply_state(&mut self, state: MapperState) {
         self.mapper.apply_state(state);
     }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.mapper.save_state()
+    }
 }
 
 #[derive(Debug)]

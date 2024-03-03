@@ -19,6 +19,7 @@ pub trait Mapper {
     }
     fn count_scanline(&mut self) {}
     fn apply_state(&mut self, state: MapperState);
+    fn save_state(&self) -> Vec<u8>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

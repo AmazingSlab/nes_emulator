@@ -110,6 +110,23 @@ impl Cpu {
         self.stack_pointer = state.stack_pointer;
         self.status = Status::from_bits_retain(state.status);
     }
+
+    pub fn save_state(&self, ram: &[u8]) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&serialize(&self.accumulator, "A"));
+        buffer.extend_from_slice(&serialize(&self.x_register, "X"));
+        buffer.extend_from_slice(&serialize(&self.y_register, "Y"));
+        buffer.extend_from_slice(&serialize(&self.program_counter, "PC"));
+        buffer.extend_from_slice(&serialize(&self.stack_pointer, "S"));
+        buffer.extend_from_slice(&serialize(&self.status.bits(), "P"));
+        buffer.extend_from_slice(&serialize(&0u8, "DB")); // Currently unused.
+        buffer.extend_from_slice(&serialize(&ram, "RAM"));
+
+        buffer
+    }
 }
 
 /// Higher level functions to control the CPU.
