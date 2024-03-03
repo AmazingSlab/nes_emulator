@@ -57,6 +57,19 @@ impl Nes {
         self.ppu.borrow_mut().is_frame_ready = false;
     }
 
+    pub fn apply_state(&self, state: &[u8]) -> Result<(), String> {
+        let decompressed = Savestate::decompress(state)?;
+        let savestate = Savestate::new(&decompressed)?;
+
+        self.bus.borrow_mut().apply_state(savestate);
+
+        Ok(())
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.bus.borrow().save_state()
+    }
+
     pub fn image_buffer_raw(&self) -> *const u8 {
         self.ppu.borrow().buffer_raw()
     }
