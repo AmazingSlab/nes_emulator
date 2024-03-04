@@ -6,11 +6,6 @@ pub struct GameGenie {
 
 impl GameGenie {
     pub fn new<T: AsRef<str>>(codes: &[T]) -> Result<Self, &'static str> {
-        if codes.len() > 3 {
-            // Not strictly necessary, but is the limit on a real Game Genie.
-            return Err("max 3 codes at once");
-        }
-
         let codes = codes
             .iter()
             .map(|code| GameGenieCode::new(code.as_ref()))
