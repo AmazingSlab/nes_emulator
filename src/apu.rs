@@ -734,7 +734,7 @@ impl DmcChannel {
                     self.sample_buffer = 0x00;
                 }
             }
-            let sample = (self.output_level as f32 / 127.0) * (VOLUME * 2) as f32;
+            let sample = (self.output_level as f32 / 127.0) * (VOLUME * 8) as f32;
             self.output = sample as i16;
             self.timer = self.timer_reload + 1;
         }
