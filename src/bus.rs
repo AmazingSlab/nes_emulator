@@ -146,9 +146,8 @@ impl Bus {
         if !bus.borrow().is_oam_dma_active && !apu.borrow().is_dmc_dma_active() {
             cpu.borrow_mut().clock();
         } else if apu.borrow().is_dmc_dma_active() {
-            // TODO: Align with OAM DMA to prevent sprite corruption.
             if bus.borrow().dmc_dma_dummy {
-                if bus.borrow().cycle % 2 == 1 {
+                if bus.borrow().cycle % 2 == 0 {
                     bus.borrow_mut().dmc_dma_dummy = false;
                 }
             } else {
