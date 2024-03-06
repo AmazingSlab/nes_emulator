@@ -134,7 +134,13 @@ pub fn main() {
     let cpu = Rc::new(RefCell::new(Cpu::new()));
     let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
     let apu = Rc::new(RefCell::new(Apu::new()));
-    let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), apu.clone(), cartridge);
+    let bus = Bus::new(
+        cpu.clone(),
+        nes_emulator::new_boxed_array(),
+        ppu.clone(),
+        apu.clone(),
+        cartridge,
+    );
     cpu.borrow_mut().reset();
     let mut event_pump = sdl_context.event_pump().unwrap();
 

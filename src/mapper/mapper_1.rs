@@ -1,4 +1,7 @@
-use crate::is_bit_set;
+use crate::{
+    is_bit_set,
+    savestate::{self, MapperState},
+};
 
 use super::{Mapper, Mirroring};
 
@@ -153,6 +156,72 @@ impl Mapper for Mapper1 {
             3 => Mirroring::Horizontal,
             _ => unreachable!(),
         }
+    }
+
+    fn apply_state(&mut self, state: MapperState) {
+        for (description, section) in state {
+            match description {
+                "DREG" => {
+                    [
+                        self.control.0,
+                        self.chr_bank_0,
+                        self.chr_bank_1,
+                        self.prg_bank,
+                    ] = savestate::deserialize(section).unwrap_or_default()
+                }
+                "LRST" => {
+                    // Internal timestamp used by FCEUX to determine if the mapper should accept a
+                    // write.
+                }
+                "BFFR" => self.shift = savestate::deserialize(section).unwrap_or_default(),
+                "BFRS" => self.shift_count = savestate::deserialize(section).unwrap_or_default(),
+                "WRAM" => {
+                    let Ok(prg_ram) = savestate::deserialize::<Vec<u8>>(section) else {
+                        continue;
+                    };
+                    if prg_ram.len() == self.prg_ram.len() {
+                        self.prg_ram = prg_ram;
+                    }
+                }
+                "CHRR" => {
+                    if !self.has_chr_ram {
+                        continue;
+                    }
+                    let Ok(chr_ram) = savestate::deserialize::<Vec<u8>>(section) else {
+                        continue;
+                    };
+                    if chr_ram.len() == self.chr_rom.len() {
+                        self.chr_rom = chr_ram;
+                    }
+                }
+                _ => println!("warn: unrecognized section `{description}`"),
+            }
+        }
+    }
+
+    fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        if self.has_chr_ram {
+            buffer.extend_from_slice(&serialize(&self.chr_rom, "CHRR"));
+        }
+
+        buffer.extend_from_slice(&serialize(&self.prg_ram, "WRAM"));
+        buffer.extend_from_slice(&serialize(
+            &[
+                self.control.0,
+                self.chr_bank_0,
+                self.chr_bank_1,
+                self.prg_bank,
+            ],
+            "DREG",
+        ));
+        buffer.extend_from_slice(&serialize(&self.shift, "BFFR"));
+        buffer.extend_from_slice(&serialize(&self.shift_count, "BFRS"));
+
+        buffer
     }
 }
 

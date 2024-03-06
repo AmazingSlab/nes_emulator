@@ -2,9 +2,11 @@ mod apu;
 mod bus;
 mod cartridge;
 pub mod cpu;
+mod game_genie;
 pub mod mapper;
 pub mod ppu;
 mod replay;
+pub mod savestate;
 
 #[cfg(feature = "wasm")]
 use std::{cell::RefCell, rc::Rc};
@@ -13,8 +15,10 @@ pub use apu::Apu;
 pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use cpu::Cpu;
+pub use game_genie::{GameGenie, GameGenieCode};
 pub use ppu::Ppu;
 pub use replay::{InputCommand, Replay};
+pub use savestate::Savestate;
 
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
@@ -32,6 +36,7 @@ pub struct Nes {
     cpu: Rc<RefCell<Cpu>>,
     ppu: Rc<RefCell<Ppu>>,
     apu: Rc<RefCell<Apu>>,
+    cartridge: Rc<RefCell<Cartridge>>,
 }
 
 #[cfg(feature = "wasm")]
@@ -42,10 +47,22 @@ impl Nes {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
         let apu = Rc::new(RefCell::new(Apu::new()));
-        let bus = Bus::new(cpu.clone(), [0; 2048], ppu.clone(), apu.clone(), cartridge);
+        let bus = Bus::new(
+            cpu.clone(),
+            crate::new_boxed_array(),
+            ppu.clone(),
+            apu.clone(),
+            cartridge.clone(),
+        );
         cpu.borrow_mut().reset();
 
-        Ok(Self { bus, cpu, ppu, apu })
+        Ok(Self {
+            bus,
+            cpu,
+            ppu,
+            apu,
+            cartridge,
+        })
     }
 
     pub fn tick(&self) {
@@ -53,6 +70,24 @@ impl Nes {
             self.clock();
         }
         self.ppu.borrow_mut().is_frame_ready = false;
+    }
+
+    pub fn apply_state(&self, state: &[u8]) -> Result<(), String> {
+        let decompressed = Savestate::decompress(state)?;
+        let savestate = Savestate::new(&decompressed)?;
+
+        self.bus.borrow_mut().apply_state(savestate);
+
+        Ok(())
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.bus.borrow().save_state()
+    }
+
+    pub fn set_game_genie_codes(&self, codes: Vec<String>) -> Result<(), String> {
+        self.cartridge.borrow_mut().set_game_genie_codes(&codes)?;
+        Ok(())
     }
 
     pub fn image_buffer_raw(&self) -> *const u8 {
@@ -145,4 +180,14 @@ impl std::fmt::Display for Controller {
 
         write!(f, "{right}{left}{down}{up}{start}{select}{b}{a}")
     }
+}
+
+/// Creates a new array directly on the heap without going through the stack.
+///
+/// This is a workaround to avoid stack overflows in debug builds, as without optimizations,
+/// `Box::new([T; N])` allocates the array on the stack before moving to the heap.
+pub fn new_boxed_array<T: Default + Clone, const N: usize>() -> Box<[T; N]> {
+    // SAFETY: A Box<[T]> obtained from a Vec<T> with N elements is guaranteed to be safe to cast to
+    // a Box<[T; N]>.
+    unsafe { Box::from_raw(Box::into_raw(vec![T::default(); N].into_boxed_slice()) as *mut [T; N]) }
 }

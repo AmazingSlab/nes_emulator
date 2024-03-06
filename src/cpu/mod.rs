@@ -9,7 +9,7 @@ use std::{
 pub use cpu_instruction::CpuInstruction;
 pub use instruction::Instruction;
 
-use crate::{concat_bytes, high_byte, is_bit_set, low_byte, Bus};
+use crate::{concat_bytes, high_byte, is_bit_set, low_byte, savestate::CpuState, Bus};
 
 /// The 6502 CPU powering the NES.
 #[derive(Default)]
@@ -100,6 +100,32 @@ impl Cpu {
             self.cycle_wait = self.execute_next();
         }
         self.cycle_wait -= 1;
+    }
+
+    pub fn apply_state(&mut self, state: &CpuState) {
+        self.accumulator = state.accumulator;
+        self.x_register = state.x_register;
+        self.y_register = state.y_register;
+        self.program_counter = state.program_counter;
+        self.stack_pointer = state.stack_pointer;
+        self.status = Status::from_bits_retain(state.status);
+    }
+
+    pub fn save_state(&self, ram: &[u8]) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&serialize(&self.accumulator, "A"));
+        buffer.extend_from_slice(&serialize(&self.x_register, "X"));
+        buffer.extend_from_slice(&serialize(&self.y_register, "Y"));
+        buffer.extend_from_slice(&serialize(&self.program_counter, "PC"));
+        buffer.extend_from_slice(&serialize(&self.stack_pointer, "S"));
+        buffer.extend_from_slice(&serialize(&self.status.bits(), "P"));
+        buffer.extend_from_slice(&serialize(&0u8, "DB")); // Currently unused.
+        buffer.extend_from_slice(&serialize(&ram, "RAM"));
+
+        buffer
     }
 }
 
@@ -1591,7 +1617,7 @@ mod tests {
         const HEADER: [u8; 16] = [0x4E, 0x45, 0x53, 0x1A, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
         // Load the program directly into internal RAM.
-        let mut ram = [0; 2048];
+        let mut ram = crate::new_boxed_array();
         ram[0..program.len()].copy_from_slice(&program);
 
         // Construct a basic iNES ROM file to load.
@@ -1617,7 +1643,7 @@ mod tests {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(cartridge.clone())));
         let apu = Rc::new(RefCell::new(Apu::new()));
-        let _bus = Bus::new(cpu.clone(), [0; 2048], ppu, apu, cartridge);
+        let _bus = Bus::new(cpu.clone(), crate::new_boxed_array(), ppu, apu, cartridge);
 
         let mut cpu = cpu.borrow_mut();
         cpu.reset();

@@ -5,7 +5,7 @@ use std::{
 
 mod color;
 
-use crate::{mapper::Mirroring, Bus, Cartridge};
+use crate::{mapper::Mirroring, savestate::PpuState, Bus, Cartridge};
 use color::Color;
 
 pub struct Ppu {
@@ -25,9 +25,9 @@ pub struct Ppu {
     pattern_table_buffer: Box<[u8; 256 * 128 * 3]>,
     #[cfg(feature = "memview")]
     oam_buffer: Box<[u8; 64 * 64 * 3]>,
-    nametables: [u8; 2048],
-    palette_ram: [u8; 32],
-    oam: [u8; 256],
+    nametables: Box<[u8; 2048]>,
+    palette_ram: Box<[u8; 32]>,
+    oam: Box<[u8; 256]>,
     pub oam_addr: u8,
     pub oam_dma_page: u8,
     cycle: u16,
@@ -64,40 +64,13 @@ pub struct Ppu {
 
 impl Ppu {
     pub fn new(cartridge: Rc<RefCell<Cartridge>>) -> Self {
-        // Allocate directly on the heap without going through the stack.
-        // This is necessary to avoid stack overflows in debug builds without having to sacrifice
-        // the array length guarantee, as without optimizations, Box::new([T; N]) allocates the
-        // array on the stack before moving to the heap.
-        //
-        // SAFETY: A raw pointer to memory previously owned by a Box is always safe to turn back
-        // into a Box. Casting to a fixed-size array pointer is safe because the Vec is guaranteed
-        // to have the same number of elements.
-        #[cfg(not(feature = "wasm"))]
-        let buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 3].into_boxed_slice())
-                as *mut [u8; 256 * 240 * 3])
-        };
-        #[cfg(feature = "wasm")]
-        let buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 256 * 240 * 4].into_boxed_slice())
-                as *mut [u8; 256 * 240 * 4])
-        };
+        let buffer = crate::new_boxed_array();
         #[cfg(feature = "memview")]
-        let nametable_buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 512 * 480 * 3].into_boxed_slice())
-                as *mut [u8; 512 * 480 * 3])
-        };
+        let nametable_buffer = crate::new_boxed_array();
         #[cfg(feature = "memview")]
-        let pattern_table_buffer = unsafe {
-            Box::from_raw(Box::into_raw(vec![0u8; 256 * 128 * 3].into_boxed_slice())
-                as *mut [u8; 256 * 128 * 3])
-        };
+        let pattern_table_buffer = crate::new_boxed_array();
         #[cfg(feature = "memview")]
-        let oam_buffer = unsafe {
-            Box::from_raw(
-                Box::into_raw(vec![0u8; 64 * 64 * 3].into_boxed_slice()) as *mut [u8; 64 * 64 * 3]
-            )
-        };
+        let oam_buffer = crate::new_boxed_array();
 
         Self {
             control: PpuControl::default(),
@@ -113,9 +86,9 @@ impl Ppu {
             pattern_table_buffer,
             #[cfg(feature = "memview")]
             oam_buffer,
-            nametables: [0; 2048],
-            palette_ram: [0; 32],
-            oam: [0; 256],
+            nametables: crate::new_boxed_array(),
+            palette_ram: crate::new_boxed_array(),
+            oam: crate::new_boxed_array(),
             oam_addr: 0,
             oam_dma_page: 0,
             cycle: 0,
@@ -179,6 +152,45 @@ impl Ppu {
 
     pub fn connect_bus(&mut self, bus: Weak<RefCell<Bus>>) {
         self.bus = bus;
+    }
+
+    pub fn apply_state(&mut self, state: PpuState) {
+        self.nametables = state.nametables;
+        self.palette_ram = state.palette_ram;
+        self.oam = state.oam;
+
+        self.control.0 = state.control;
+        self.mask.0 = state.mask;
+        self.status.0 = state.status;
+        self.oam_addr = state.oam_addr;
+
+        self.fine_x_scroll = state.tile_x_offset;
+        self.addr_latch = state.addr_latch;
+        self.vram_addr = VramAddress::from(state.vram_addr);
+        self.temp_vram_addr = VramAddress::from(state.temp_vram_addr);
+        self.ppu_data_buffer = state.data_buffer;
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        use crate::savestate::serialize;
+
+        let mut buffer = Vec::new();
+
+        buffer.extend_from_slice(&serialize(&self.nametables, "NTAR"));
+        buffer.extend_from_slice(&serialize(&self.palette_ram, "PRAM"));
+        buffer.extend_from_slice(&serialize(&self.oam, "SPRA"));
+        buffer.extend_from_slice(&serialize(
+            &[self.control.0, self.mask.0, self.status.0, self.oam_addr],
+            "PPUR",
+        ));
+        buffer.extend_from_slice(&serialize(&self.fine_x_scroll, "XOFF"));
+        buffer.extend_from_slice(&serialize(&self.addr_latch, "VTGL"));
+        buffer.extend_from_slice(&serialize(&self.vram_addr.0, "RADD"));
+        buffer.extend_from_slice(&serialize(&self.temp_vram_addr.0, "TADD"));
+        buffer.extend_from_slice(&serialize(&self.ppu_data_buffer, "VBUF"));
+        buffer.extend_from_slice(&serialize(&0u8, "PGEN")); // Unused debug variable.
+
+        buffer
     }
 
     #[cfg(not(feature = "wasm"))]

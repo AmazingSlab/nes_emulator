@@ -3,12 +3,14 @@ use std::{cell::RefCell, rc::Weak};
 use crate::{
     is_bit_set,
     mapper::{Mapper, Mapper0, Mapper1, Mapper4, Mirroring},
-    Bus,
+    savestate::MapperState,
+    Bus, GameGenie,
 };
 
 pub struct Cartridge {
     mapper: Box<dyn Mapper>,
     bus: Weak<RefCell<Bus>>,
+    game_genie: Option<GameGenie>,
 }
 
 impl Cartridge {
@@ -42,6 +44,7 @@ impl Cartridge {
         Ok(Self {
             mapper,
             bus: Weak::new(),
+            game_genie: None,
         })
     }
 
@@ -49,8 +52,21 @@ impl Cartridge {
         self.bus = bus;
     }
 
+    pub fn set_game_genie_codes<T: AsRef<str>>(&mut self, codes: &[T]) -> Result<(), String> {
+        self.game_genie = Some(GameGenie::new(codes)?);
+        Ok(())
+    }
+
     pub fn cpu_read(&self, addr: u16) -> u8 {
-        self.mapper.cpu_read(addr)
+        let value = self.mapper.cpu_read(addr);
+        if let Some(game_genie) = self.game_genie.as_ref() {
+            for code in game_genie.codes() {
+                if code.address == addr && (code.compare == Some(value) || code.compare.is_none()) {
+                    return code.value;
+                }
+            }
+        }
+        value
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
@@ -74,6 +90,14 @@ impl Cartridge {
         if self.mapper.check_irq() {
             self.bus.upgrade().unwrap().borrow_mut().request_irq();
         }
+    }
+
+    pub fn apply_state(&mut self, state: MapperState) {
+        self.mapper.apply_state(state);
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        self.mapper.save_state()
     }
 }
 

@@ -5,8 +5,9 @@ quickly test out the project, check out the [web demo](https://nes.purmple.com).
 
 ## Features
 
+- Savestate support
+- Game Genie support
 - Audio support
-  - 4 of 5 channels implemented
 - Basic recording/movie playback
 - Mappers
   - NROM (used by Super Mario Bros. 1, Donkey Kong, Micro Mages)
