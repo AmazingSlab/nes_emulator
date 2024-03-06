@@ -692,6 +692,7 @@ impl DmcChannel {
         if self.sample_bytes_remaining == 0 && self.is_automatic_playback_enabled {
             self.address_counter = self.sample_address();
             self.sample_bytes_remaining = self.sample_length();
+            self.sample_length = 0;
         }
         if self.sample_buffer == 0x00 && self.sample_bytes_remaining > 0 && !self.was_dma_active {
             self.is_dma_active = true;
