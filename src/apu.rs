@@ -715,6 +715,12 @@ impl DmcChannel {
         }
         self.timer = self.timer.wrapping_sub(1) & 0x07FF;
         if self.timer == 0x07FF {
+            // Alternating between 1 and 0 is the closest you can get to silence with delta
+            // modulation, but this results in an unpleasant high-pitched ringing noise. Set the
+            // silence flag instead to keep the same level.
+            if self.shift_register == 0b10101010 || self.shift_register == 0b01010101 {
+                self.silence_flag = true;
+            }
             if !self.silence_flag {
                 if self.shift_register & 0x01 != 0 && self.output_level <= 125 {
                     self.output_level += 2;
