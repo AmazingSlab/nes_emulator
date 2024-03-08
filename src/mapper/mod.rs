@@ -1,9 +1,11 @@
 mod mapper_0;
 mod mapper_1;
+mod mapper_2;
 mod mapper_4;
 
 pub use mapper_0::Mapper0;
 pub use mapper_1::Mapper1;
+pub use mapper_2::Mapper2;
 pub use mapper_4::Mapper4;
 
 use crate::savestate::MapperState;
