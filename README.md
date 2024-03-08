@@ -12,6 +12,7 @@ quickly test out the project, check out the [web demo](https://nes.purmple.com).
 - Mappers
   - NROM (used by Super Mario Bros. 1, Donkey Kong, Micro Mages)
   - MMC1 (used by The Legend of Zelda, Tetris)
+  - UxROM (used by Castlevania, Duck Tales)
   - MMC3 (used by Super Mario Bros. 2-3, Kirby's Adventure, [Bad Apple](https://littlelimit.net/bad_apple_2_5.htm))
 
 ## Disclaimer
