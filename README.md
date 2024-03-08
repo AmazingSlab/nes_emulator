@@ -103,8 +103,9 @@ The build files will then be available in `./pkg/`.
 | ROM                 | Compatibility | Notes                                 | Workarounds       |
 | ------------------- | ------------- | ------------------------------------- | ----------------- |
 | Bad Apple           | 🟢 Good       | Gray box covers the top of the screen | Press Start twice |
-| Castlevania         | ⚫ None       | Unsupported mapper                    |                   |
+| Castlevania         | 🔵 Great      |                                       |                   |
 | Donkey Kong         | 🔵 Great      |                                       |                   |
+| Duck Tales          | 🔵 Great      |                                       |                   |
 | Ice Climber         | 🔵 Great      |                                       |                   |
 | Kirby's Adventure   | 🔵 Great      |                                       |                   |
 | Mega Man 1          | ⚫ None       | Unsupported mapper                    |                   |
